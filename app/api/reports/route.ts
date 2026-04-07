@@ -64,6 +64,8 @@ export async function GET(request: NextRequest) {
 
     for (const row of rows) {
       const amount = Number(row.amount);
+      // Excludem transferurile din analiză
+      if (row.categoryName === "Transferuri") continue;
       if (amount < 0) {
         totalExpenses += Math.abs(amount);
         const key = row.categoryId ?? "__uncategorized__";
@@ -101,6 +103,7 @@ export async function GET(request: NextRequest) {
 
     for (const row of rows) {
       const amount = Number(row.amount);
+      if (row.categoryName === "Transferuri") continue;
       const [year, month] = row.date.split("-");
       const key = `${year}-${month}`;
       const label = `${MONTH_NAMES[parseInt(month, 10) - 1]} ${year}`;
