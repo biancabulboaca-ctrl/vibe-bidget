@@ -21,35 +21,6 @@
   --color-gray-900: #111827;
 }
 
-/* Force light mode - disabled dark mode auto-detection */
-
 body {
-  background: #ffffff !important;
-  color: #171717 !important;
   font-family: Arial, Helvetica, sans-serif;
-  color-scheme: light !important;
-}
-
-/* Ensure all headings are dark by default */
-h1, h2, h3, h4, h5, h6 {
-  color: #111827;
-}
-
-/* Ensure all paragraphs and text are dark by default */
-p, span, div {
-  color: #171717;
-}
-
-/* Force rebuild for text color updates */
-
-/* Override all gray text colors to ensure readability */
-.text-gray-500,
-.text-gray-600,
-.text-gray-700,
-.text-gray-800,
-[class*="text-gray-5"],
-[class*="text-gray-6"],
-[class*="text-gray-7"],
-[class*="text-gray-8"] {
-  color: #1f2937 !important; /* Dark gray for readability */
 }

@@ -1,0 +1,134 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { db, schema } from "@/lib/db";
+import { eq, and, gte } from "drizzle-orm";
+
+const MONTH_NAMES = ["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
+
+function getDateFrom(period: string): string | null {
+  const now = new Date();
+  if (period === "current-month") {
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  }
+  if (period === "3months") {
+    const d = new Date(now);
+    d.setMonth(d.getMonth() - 3);
+    return d.toISOString().split("T")[0];
+  }
+  if (period === "6months") {
+    const d = new Date(now);
+    d.setMonth(d.getMonth() - 6);
+    return d.toISOString().split("T")[0];
+  }
+  return null; // "all" — fără filtru
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { searchParams } = new URL(request.url);
+    const period = searchParams.get("period") || "current-month";
+    const dateFrom = getDateFrom(period);
+
+    // Fetch tranzacții cu join la categories
+    const conditions = [eq(schema.transactions.userId, authUser.id)];
+    if (dateFrom) conditions.push(gte(schema.transactions.date, dateFrom));
+
+    const rows = await db
+      .select({
+        amount: schema.transactions.amount,
+        date: schema.transactions.date,
+        categoryId: schema.transactions.categoryId,
+        categoryName: schema.categories.name,
+        categoryIcon: schema.categories.icon,
+        categoryColor: schema.categories.color,
+      })
+      .from(schema.transactions)
+      .leftJoin(schema.categories, eq(schema.transactions.categoryId, schema.categories.id))
+      .where(and(...conditions));
+
+    // --- Agregare byCategory (doar cheltuieli) ---
+    const categoryMap = new Map<string, {
+      categoryId: string | null;
+      categoryName: string;
+      categoryIcon: string;
+      categoryColor: string;
+      total: number;
+    }>();
+
+    let totalExpenses = 0;
+    let totalIncome = 0;
+
+    for (const row of rows) {
+      const amount = Number(row.amount);
+      if (amount < 0) {
+        totalExpenses += Math.abs(amount);
+        const key = row.categoryId ?? "__uncategorized__";
+        const existing = categoryMap.get(key);
+        if (existing) {
+          existing.total += Math.abs(amount);
+        } else {
+          categoryMap.set(key, {
+            categoryId: row.categoryId,
+            categoryName: row.categoryName ?? "Necategorizate",
+            categoryIcon: row.categoryIcon ?? "❓",
+            categoryColor: row.categoryColor ?? "#6b7280",
+            total: Math.abs(amount),
+          });
+        }
+      } else {
+        totalIncome += amount;
+      }
+    }
+
+    const byCategory = Array.from(categoryMap.values())
+      .sort((a, b) => b.total - a.total)
+      .map((c) => ({
+        ...c,
+        percentage: totalExpenses > 0 ? Math.round((c.total / totalExpenses) * 100) : 0,
+      }));
+
+    // --- Agregare byMonth ---
+    const monthMap = new Map<string, { label: string; expenses: number; income: number }>();
+
+    for (const row of rows) {
+      const amount = Number(row.amount);
+      const [year, month] = row.date.split("-");
+      const key = `${year}-${month}`;
+      const label = `${MONTH_NAMES[parseInt(month, 10) - 1]} ${year}`;
+
+      const existing = monthMap.get(key);
+      if (existing) {
+        if (amount < 0) existing.expenses += Math.abs(amount);
+        else existing.income += amount;
+      } else {
+        monthMap.set(key, {
+          label,
+          expenses: amount < 0 ? Math.abs(amount) : 0,
+          income: amount >= 0 ? amount : 0,
+        });
+      }
+    }
+
+    const byMonth = Array.from(monthMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, data]) => ({ month, ...data }));
+
+    return NextResponse.json({
+      byCategory,
+      byMonth,
+      summary: {
+        totalExpenses,
+        totalIncome,
+        balance: totalIncome - totalExpenses,
+        transactionCount: rows.length,
+      },
+    });
+  } catch (error) {
+    console.error("[REPORTS_GET] Error:", error);
+    return NextResponse.json({ error: "Eroare internă server" }, { status: 500 });
+  }
+}

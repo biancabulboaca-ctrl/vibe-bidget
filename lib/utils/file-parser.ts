@@ -140,39 +140,76 @@ export async function parseExcel(file: File): Promise<ParseResult> {
       try {
         const data = e.target?.result;
         if (!data) {
-          resolve({
-            success: false,
-            transactions: [],
-            error: "Nu s-a putut citi fișierul",
-          });
+          resolve({ success: false, transactions: [], error: "Nu s-a putut citi fișierul" });
           return;
         }
 
-        // Parsăm Excel-ul
         const workbook = XLSX.read(data, { type: "binary" });
-
-        // Luăm prima foaie (sheet)
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
 
-        // Convertim în JSON
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        // Citim toate rândurile ca array simplu pentru a detecta header-ul real
+        // Unele bănci (ex: Raiffeisen) au 20+ rânduri de metadata înainte de tabel
+        const allRows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-        console.log('[parseExcel] Sheet name:', sheetName);
-        console.log('[parseExcel] Total rows:', jsonData.length);
-        console.log('[parseExcel] First row sample:', jsonData[0]);
-        console.log('[parseExcel] Column headers:', Object.keys(jsonData[0] || {}));
+        // Căutăm rândul de header: rândul cu cel mai mare scor de cuvinte-cheie financiare.
+        // Folosim word-boundary pentru "debit"/"credit" ca să nu potrivim "debitor"/"creditor".
+        const simpleKeywords = ["data", "suma", "descriere", "description", "amount", "date", "valoare"];
+        const boundaryKeywords = ["debit", "credit"]; // trebuie ca cuvinte separate
+
+        const scoreRow = (row: unknown[]): number => {
+          const rowText = row.map(c => String(c ?? "").toLowerCase()).join(" ");
+          let score = simpleKeywords.filter(k => rowText.includes(k)).length;
+          score += boundaryKeywords.filter(k =>
+            new RegExp(`(^|[\\s/,;|])${k}([\\s/,;|]|$)`, "i").test(rowText)
+          ).length;
+          return score;
+        };
+
+        let headerRowIndex = 0;
+        let bestScore = 0;
+
+        for (let i = 0; i < Math.min(allRows.length, 40); i++) {
+          const row = allRows[i];
+          if (!Array.isArray(row) || row.length < 2) continue;
+          const score = scoreRow(row);
+          if (score > bestScore) {
+            bestScore = score;
+            headerRowIndex = i;
+          }
+        }
+
+        // DEBUG TEMPORAR
+        console.log('[parseExcel] Total rows in sheet:', allRows.length);
+        console.log('[parseExcel] Header row detected at index:', headerRowIndex, '(row', headerRowIndex + 1, 'in Excel)');
+        console.log('[parseExcel] Header row content:', allRows[headerRowIndex]);
+        console.log('[parseExcel] Score of detected header:', bestScore);
+
+        // Construim obiectele folosind rândul de header detectat
+        const headers = (allRows[headerRowIndex] as unknown[]).map(h => String(h ?? "").trim());
+        const dataRows = allRows.slice(headerRowIndex + 1);
+
+        const jsonData = dataRows
+          .filter(row => Array.isArray(row) && row.some(cell => cell !== null && cell !== undefined && cell !== ""))
+          .map(row => {
+            const obj: Record<string, unknown> = {};
+            headers.forEach((header, idx) => {
+              if (header) obj[header] = (row as unknown[])[idx];
+            });
+            return obj;
+          });
+
+        console.log('[parseExcel] Headers found:', headers);
+        console.log('[parseExcel] Data rows count:', jsonData.length);
+        if (jsonData.length > 0) {
+          console.log('[parseExcel] First data row:', jsonData[0]);
+        }
 
         if (jsonData.length === 0) {
-          resolve({
-            success: false,
-            transactions: [],
-            error: "Fișierul Excel este gol",
-          });
+          resolve({ success: false, transactions: [], error: "Fișierul Excel este gol sau formatul nu este recunoscut" });
           return;
         }
 
-        // Transformăm în tranzacții (similar cu CSV)
         const transactions: ParsedTransaction[] = [];
 
         jsonData.forEach((row: any, index: number) => {
@@ -182,32 +219,16 @@ export async function parseExcel(file: File): Promise<ParseResult> {
             const amount = detectAmount(row);
             const currency = detectCurrency(row);
 
-            if (index < 3) {
-              console.log(`[parseExcel] Row ${index}:`, {
-                date,
-                description,
-                amount,
-                currency,
-                rawRow: row
-              });
-            }
-
             if (date && description && amount !== null) {
-              transactions.push({
-                date: formatDate(date),
-                description: description.trim(),
-                amount: parseFloat(amount),
-                currency: currency || "RON",
-                type: parseFloat(amount) < 0 ? "debit" : "credit",
-                originalData: row,
-              });
-            } else {
-              if (index < 5) {
-                console.warn(`[parseExcel] Skipping row ${index} - missing data:`, {
-                  hasDate: !!date,
-                  hasDescription: !!description,
-                  hasAmount: amount !== null,
-                  row
+              const numericAmount = parseFloat(String(amount).replace(/\s/g, "").replace(",", "."));
+              if (!isNaN(numericAmount) && numericAmount !== 0) {
+                transactions.push({
+                  date: formatDate(date),
+                  description: description.trim(),
+                  amount: numericAmount,
+                  currency: currency || "RON",
+                  type: numericAmount < 0 ? "debit" : "credit",
+                  originalData: row,
                 });
               }
             }
@@ -216,26 +237,14 @@ export async function parseExcel(file: File): Promise<ParseResult> {
           }
         });
 
-        resolve({
-          success: true,
-          transactions,
-          rowCount: jsonData.length,
-        });
+        resolve({ success: true, transactions, rowCount: jsonData.length });
       } catch (error: any) {
-        resolve({
-          success: false,
-          transactions: [],
-          error: error.message,
-        });
+        resolve({ success: false, transactions: [], error: error.message });
       }
     };
 
     reader.onerror = () => {
-      resolve({
-        success: false,
-        transactions: [],
-        error: "Eroare la citirea fișierului",
-      });
+      resolve({ success: false, transactions: [], error: "Eroare la citirea fișierului" });
     };
 
     reader.readAsBinaryString(file);
@@ -303,8 +312,9 @@ function detectDate(row: any): string | null {
 function detectDescription(row: any): string | null {
   // Adăugăm variante cu diacritice pentru Revolut România
   // RUSSIAN: "Описание" (Description)
+  // NOTĂ: "beneficiar" eliminat intenționat — "Cod fiscal beneficiar" (Raiffeisen) e coloană goală
   const descKeys = [
-    "descriere", "description", "detalii", "details", "beneficiar",
+    "descriere", "description", "detalii", "details",
     "описание", // Russian: description
   ];
 
@@ -329,45 +339,43 @@ function detectAmount(row: any): string | null {
     "сумма", // Russian: amount
   ];
 
-  // Căutăm o coloană cu suma
-  for (const key of Object.keys(row)) {
-    // Normalizăm: lowercase + trim spații invizibile
-    const normalizedKey = key.toLowerCase().trim();
-
-    // DEBUG: Verificăm fiecare cheie
-    const matches = amountKeys.filter(k => normalizedKey.includes(k));
-    if (matches.length > 0) {
-      console.log('[detectAmount] ✅ MATCH! Key:', `"${key}"`, '→ normalized:', `"${normalizedKey}"`, '→ matched:', matches);
-      return row[key];
-    }
-  }
-
-  // Dacă nu găsim, verificăm dacă există coloane separate Debit/Credit (format ING)
-  const debitKeys = ["debit"];
-  const creditKeys = ["credit"];
-
+  // Detectăm dacă există coloane separate Debit/Credit (format Raiffeisen, ING)
+  // Ex: "Suma debit", "Suma credit" → trebuie tratate separat, nu via amountKeys
   let debitValue: string | null = null;
   let creditValue: string | null = null;
+  let hasDebitCreditCols = false;
 
   for (const key of Object.keys(row)) {
-    const lowerKey = key.toLowerCase();
-    if (debitKeys.some((k) => lowerKey.includes(k))) {
+    const lowerKey = key.toLowerCase().trim();
+    if (lowerKey.includes("debit")) {
       debitValue = row[key];
+      hasDebitCreditCols = true;
     }
-    if (creditKeys.some((k) => lowerKey.includes(k))) {
+    if (lowerKey.includes("credit")) {
       creditValue = row[key];
+      hasDebitCreditCols = true;
     }
   }
 
-  // Dacă avem Debit/Credit, returnăm valoarea care nu e goală
-  // Debit = negativ (cheltuială), Credit = pozitiv (venit)
-  if (debitValue && debitValue.trim() !== "") {
-    console.log('[detectAmount] Found debit value:', debitValue);
-    return `-${debitValue}`;
+  if (!hasDebitCreditCols) {
+    // Format coloană unică (ex: "Suma", "Amount") — căutăm direct
+    for (const key of Object.keys(row)) {
+      const normalizedKey = key.toLowerCase().trim();
+      const matches = amountKeys.filter(k => normalizedKey.includes(k));
+      if (matches.length > 0) {
+        console.log('[detectAmount] ✅ MATCH! Key:', `"${key}"`, '→ matched:', matches);
+        return row[key];
+      }
+    }
   }
-  if (creditValue && creditValue.trim() !== "") {
-    console.log('[detectAmount] Found credit value:', creditValue);
-    return creditValue;
+
+  // Format Debit/Credit separat: returnăm valoarea care nu e goală
+  // Debit = negativ (cheltuială), Credit = pozitiv (venit)
+  if (debitValue && String(debitValue).trim() !== "") {
+    return `-${String(debitValue).replace(/\s/g, "")}`;
+  }
+  if (creditValue && String(creditValue).trim() !== "") {
+    return String(creditValue).replace(/\s/g, "");
   }
 
   console.warn('[detectAmount] No amount found in row:', Object.keys(row));
