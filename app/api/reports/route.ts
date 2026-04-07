@@ -84,10 +84,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Rotunjim totalurile la 2 zecimale pentru a evita floating point drift
+    totalExpenses = Math.round(totalExpenses * 100) / 100;
+    totalIncome = Math.round(totalIncome * 100) / 100;
+
     const byCategory = Array.from(categoryMap.values())
       .sort((a, b) => b.total - a.total)
       .map((c) => ({
         ...c,
+        total: Math.round(c.total * 100) / 100,
         percentage: totalExpenses > 0 ? Math.round((c.total / totalExpenses) * 100) : 0,
       }));
 
@@ -115,7 +120,12 @@ export async function GET(request: NextRequest) {
 
     const byMonth = Array.from(monthMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, data]) => ({ month, ...data }));
+      .map(([month, data]) => ({
+        month,
+        label: data.label,
+        expenses: Math.round(data.expenses * 100) / 100,
+        income: Math.round(data.income * 100) / 100,
+      }));
 
     return NextResponse.json({
       byCategory,

@@ -38,6 +38,13 @@ interface ReportData {
   };
 }
 
+interface CoachData {
+  healthScore: number;
+  healthExplanation: string;
+  tips: string[];
+  positiveObservation: string;
+}
+
 const PERIODS: { value: Period; label: string }[] = [
   { value: "current-month", label: "Luna curentă" },
   { value: "3months", label: "3 luni" },
@@ -89,15 +96,42 @@ function BarTooltipContent({ active, payload, label }: BarTooltipProps) {
   );
 }
 
+function renderPieLabel(props: {
+  cx?: number; cy?: number; midAngle?: number;
+  outerRadius?: number; percent?: number;
+}) {
+  const { cx = 0, cy = 0, midAngle = 0, outerRadius = 0, percent = 0 } = props;
+  const pct = Math.round(percent * 100);
+  if (pct <= 3) return null;
+  const RADIAN = Math.PI / 180;
+  const radius = outerRadius + 18;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  return (
+    <text x={x} y={y} fill="rgba(255,255,255,0.7)"
+      textAnchor={x > cx ? "start" : "end"}
+      dominantBaseline="central" fontSize={11} fontWeight="bold">
+      {`${pct}%`}
+    </text>
+  );
+}
+
 export default function ReportsPage() {
   const router = useRouter();
-  const [period, setPeriod] = useState<Period>("current-month");
+  const [period, setPeriod] = useState<Period>("3months");
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // AI Coach
+  const [coachData, setCoachData] = useState<CoachData | null>(null);
+  const [coachLoading, setCoachLoading] = useState(false);
+  const [coachError, setCoachError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setCoachData(null);
+      setCoachError(null);
       try {
         const res = await fetch(`/api/reports?period=${period}`);
         if (res.status === 401) { router.push("/login"); return; }
@@ -111,6 +145,41 @@ export default function ReportsPage() {
     };
     fetchData();
   }, [period, router]);
+
+  const handleAnalyze = async () => {
+    if (!data) return;
+    setCoachLoading(true);
+    setCoachError(null);
+    setCoachData(null);
+    try {
+      const res = await fetch("/api/ai/coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          period,
+          summary: data.summary,
+          byCategory: data.byCategory.map((c) => ({
+            categoryName: c.categoryName,
+            categoryIcon: c.categoryIcon,
+            total: c.total,
+            percentage: c.percentage,
+          })),
+          byMonth: data.byMonth.map((m) => ({
+            label: m.label,
+            expenses: m.expenses,
+            income: m.income,
+          })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setCoachError(json.error || "Eroare la analiză."); return; }
+      setCoachData(json);
+    } catch {
+      setCoachError("Eroare de rețea. Încearcă din nou.");
+    } finally {
+      setCoachLoading(false);
+    }
+  };
 
   const cardStyle = {
     background: "rgba(255,255,255,0.05)",
@@ -148,25 +217,55 @@ export default function ReportsPage() {
 
       <main className="container mx-auto px-4 py-8 relative z-10 max-w-6xl">
 
-        {/* Filtre perioadă */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          {PERIODS.map((p) => (
+        {/* Filtre perioadă + buton AI */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div className="flex flex-wrap gap-2">
+            {PERIODS.map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setPeriod(p.value)}
+                className="px-4 py-2 rounded-xl text-sm font-bold transition-all"
+                style={period === p.value ? {
+                  background: "linear-gradient(135deg, #14b8a6, #f97316)",
+                  color: "#ffffff",
+                  boxShadow: "0 4px 15px rgba(20,184,166,0.3)",
+                } : {
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "rgba(255,255,255,0.5)",
+                }}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {data && data.summary.transactionCount > 0 && (
             <button
-              key={p.value}
-              onClick={() => setPeriod(p.value)}
-              className="px-4 py-2 rounded-xl text-sm font-bold transition-all"
-              style={period === p.value ? {
-                background: "linear-gradient(135deg, #14b8a6, #f97316)",
+              onClick={handleAnalyze}
+              disabled={coachLoading}
+              className="px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2"
+              style={{
+                background: coachLoading
+                  ? "rgba(139,92,246,0.2)"
+                  : "linear-gradient(135deg, #7c3aed, #4f46e5)",
                 color: "#ffffff",
-                boxShadow: "0 4px 15px rgba(20,184,166,0.3)",
-              } : {
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                color: "rgba(255,255,255,0.5)",
+                boxShadow: coachLoading ? "none" : "0 4px 15px rgba(124,58,237,0.35)",
+                opacity: coachLoading ? 0.7 : 1,
+                cursor: coachLoading ? "wait" : "pointer",
               }}>
-              {p.label}
+              {coachLoading ? (
+                <>
+                  <span className="animate-spin inline-block">⏳</span>
+                  <span>Analizez...</span>
+                </>
+              ) : (
+                <>
+                  <span>🤖</span>
+                  <span>Analizează cheltuielile</span>
+                </>
+              )}
             </button>
-          ))}
+          )}
         </div>
 
         {loading ? (
@@ -275,14 +374,14 @@ export default function ReportsPage() {
                     <ResponsiveContainer width="100%" height={280}>
                       <PieChart>
                         <Pie
-                          data={data.byCategory}
+                          data={data.byCategory as unknown as Record<string, unknown>[]}
                           cx="50%"
                           cy="50%"
                           outerRadius={100}
                           innerRadius={40}
                           dataKey="total"
                           nameKey="categoryName"
-                          label={({ percentage }) => percentage > 3 ? `${percentage}%` : ""}
+                          label={renderPieLabel}
                           labelLine={false}>
                           {data.byCategory.map((entry, index) => (
                             <Cell key={index} fill={entry.categoryColor} />
@@ -348,7 +447,7 @@ export default function ReportsPage() {
                         tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
-                        tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                        tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v.toFixed(0)}`}
                         width={40}
                       />
                       <Tooltip content={<BarTooltipContent />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
@@ -365,6 +464,115 @@ export default function ReportsPage() {
               </div>
 
             </div>
+
+            {/* AI Coach Card */}
+            {coachError && (
+              <div className="mt-6 rounded-2xl px-5 py-4 text-sm"
+                style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: "#fca5a5" }}>
+                ⚠ {coachError}
+              </div>
+            )}
+
+            {coachLoading && (
+              <div className="mt-6 rounded-2xl p-8 text-center"
+                style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.2)" }}>
+                <span className="text-4xl animate-pulse">🤖</span>
+                <p className="mt-3 font-bold" style={{ color: "#a78bfa" }}>
+                  Claude analizează cheltuielile tale...
+                </p>
+                <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.3)" }}>
+                  Durează câteva secunde
+                </p>
+              </div>
+            )}
+
+            {coachData && (
+              <div className="mt-6 rounded-2xl p-6"
+                style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.25)" }}>
+
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-6">
+                  <span className="text-3xl">🤖</span>
+                  <div>
+                    <p className="font-bold text-lg" style={{ color: "#ffffff" }}>AI Financial Coach</p>
+                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+                      Analiză bazată pe datele tale reale
+                    </p>
+                  </div>
+                </div>
+
+                {/* Health Score */}
+                <div className="rounded-xl p-4 mb-5"
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-bold uppercase"
+                      style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>
+                      Health Score
+                    </span>
+                    <span className="text-3xl font-bold"
+                      style={{
+                        color: coachData.healthScore >= 70 ? "#4ade80"
+                          : coachData.healthScore >= 50 ? "#fbbf24"
+                          : "#f87171",
+                      }}>
+                      {coachData.healthScore}<span className="text-lg">/100</span>
+                    </span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="h-2 rounded-full mb-3"
+                    style={{ background: "rgba(255,255,255,0.08)" }}>
+                    <div className="h-2 rounded-full transition-all"
+                      style={{
+                        width: `${coachData.healthScore}%`,
+                        background: coachData.healthScore >= 70
+                          ? "linear-gradient(90deg, #22c55e, #4ade80)"
+                          : coachData.healthScore >= 50
+                          ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
+                          : "linear-gradient(90deg, #ef4444, #f87171)",
+                      }} />
+                  </div>
+                  <p className="text-sm" style={{ color: "rgba(255,255,255,0.6)" }}>
+                    {coachData.healthExplanation}
+                  </p>
+                </div>
+
+                {/* Observație pozitivă */}
+                <div className="rounded-xl p-4 mb-5 flex gap-3"
+                  style={{ background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.2)" }}>
+                  <span className="text-xl flex-shrink-0">✅</span>
+                  <div>
+                    <p className="text-xs font-bold uppercase mb-1"
+                      style={{ color: "rgba(74,222,128,0.7)", letterSpacing: "0.08em" }}>
+                      Ce faci bine
+                    </p>
+                    <p className="text-sm" style={{ color: "rgba(255,255,255,0.75)" }}>
+                      {coachData.positiveObservation}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Sfaturi */}
+                <div>
+                  <p className="text-xs font-bold uppercase mb-3"
+                    style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>
+                    Sfaturi personalizate
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    {coachData.tips.map((tip, i) => (
+                      <div key={i} className="flex gap-3 rounded-xl p-3"
+                        style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+                          style={{ background: "rgba(124,58,237,0.3)", color: "#a78bfa" }}>
+                          {i + 1}
+                        </span>
+                        <p className="text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>{tip}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
           </>
         )}
       </main>
