@@ -71,6 +71,28 @@ export default function TransactionsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Re-categorizare bulk
+  const [recategorizing, setRecategorizing] = useState(false);
+
+  const handleRecategorize = async () => {
+    setRecategorizing(true);
+    try {
+      const res = await fetch("/api/transactions/recategorize", { method: "POST" });
+      const data = await res.json();
+      await fetchTransactions();
+      setSuccessMessage(
+        data.updated > 0
+          ? `${data.updated} tranzacții au fost categorisite automat!`
+          : data.message || "Nicio tranzacție potrivită găsită."
+      );
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch {
+      // ignor eroarea de rețea silently
+    } finally {
+      setRecategorizing(false);
+    }
+  };
+
   // Prompt keyword după categorizare
   const [keywordPrompt, setKeywordPrompt] = useState<{
     description: string;
@@ -331,6 +353,18 @@ export default function TransactionsPage() {
                   color: "rgba(255,255,255,0.45)",
                 }}>
                 ⚠ Necategorizate
+              </button>
+              <button
+                onClick={handleRecategorize}
+                disabled={recategorizing}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                style={{
+                  background: recategorizing ? "rgba(20,184,166,0.1)" : "rgba(20,184,166,0.15)",
+                  border: "1px solid rgba(20,184,166,0.3)",
+                  color: recategorizing ? "rgba(45,212,191,0.5)" : "#2dd4bf",
+                  cursor: recategorizing ? "not-allowed" : "pointer",
+                }}>
+                {recategorizing ? "Se procesează..." : "⚡ Re-categorizează"}
               </button>
             </div>
             {hasFilters && (
