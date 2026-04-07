@@ -364,7 +364,7 @@ export default function TransactionsPage() {
                   color: recategorizing ? "rgba(45,212,191,0.5)" : "#2dd4bf",
                   cursor: recategorizing ? "not-allowed" : "pointer",
                 }}>
-                {recategorizing ? "Se procesează..." : "⚡ Re-categorizează"}
+                {recategorizing ? "Se procesează..." : "⚡ Re-categorizeaza"}
               </button>
             </div>
             {hasFilters && (
