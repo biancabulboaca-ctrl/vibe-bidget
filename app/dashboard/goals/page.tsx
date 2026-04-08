@@ -14,6 +14,7 @@ interface Goal {
   icon: string;
   color: string;
   savingsMethod: string | null;
+  notes: string | null;
 }
 
 const ICON_OPTIONS = ["🎯", "🏖️", "🚗", "🏠", "💍", "📱", "✈️", "🎓", "💪", "🐣", "🛡️", "💎"];
@@ -72,6 +73,7 @@ export default function GoalsPage() {
   const [formIcon, setFormIcon] = useState("🎯");
   const [formColor, setFormColor] = useState("#14b8a6");
   const [formMethod, setFormMethod] = useState("");
+  const [formNotes, setFormNotes] = useState("");
   const [showMethodPicker, setShowMethodPicker] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -95,7 +97,7 @@ export default function GoalsPage() {
   const openAdd = () => {
     setEditingGoal(null);
     setFormName(""); setFormTarget(""); setFormCurrent("0");
-    setFormDeadline(""); setFormIcon("🎯"); setFormColor("#14b8a6"); setFormMethod("");
+    setFormDeadline(""); setFormIcon("🎯"); setFormColor("#14b8a6"); setFormMethod(""); setFormNotes("");
     setFormError(null);
     setShowModal(true);
   };
@@ -109,6 +111,7 @@ export default function GoalsPage() {
     setFormIcon(g.icon);
     setFormColor(g.color);
     setFormMethod(g.savingsMethod || "");
+    setFormNotes(g.notes || "");
     setFormError(null);
     setShowModal(true);
   };
@@ -136,6 +139,7 @@ export default function GoalsPage() {
           icon: formIcon,
           color: formColor,
           savingsMethod: formMethod || null,
+          notes: formNotes || null,
         }),
       });
 
@@ -344,6 +348,11 @@ export default function GoalsPage() {
                         Mai ai nevoie de {formatAmount(remaining)}
                       </p>
                     )}
+                    {g.notes && (
+                      <p className="text-xs mt-2 italic" style={{ color: "rgba(255,255,255,0.4)" }}>
+                        📝 {g.notes}
+                      </p>
+                    )}
                     {g.savingsMethod && (
                       (() => {
                         const m = SAVINGS_METHODS.find((s) => s.value === g.savingsMethod);
@@ -471,6 +480,27 @@ export default function GoalsPage() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Note */}
+              <div>
+                <label className="block text-sm font-bold mb-1" style={{ color: "#2dd4bf" }}>
+                  Note / Detalii <span style={{ color: "rgba(255,255,255,0.3)", fontWeight: "normal" }}>(opțional)</span>
+                </label>
+                <textarea value={formNotes} onChange={(e) => setFormNotes(e.target.value)}
+                  placeholder="ex: VWCE.DE, SIF5, dobândă 7%, scadență Ian 2025..."
+                  rows={2}
+                  style={{
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    color: "#ffffff",
+                    borderRadius: "10px",
+                    padding: "10px 12px",
+                    fontSize: "14px",
+                    outline: "none",
+                    width: "100%",
+                    resize: "none",
+                  }} />
               </div>
 
               {/* Icon */}

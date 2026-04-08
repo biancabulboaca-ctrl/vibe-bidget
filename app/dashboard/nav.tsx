@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/upload", label: "Import", icon: "📤" },
   { href: "/dashboard/reports", label: "Rapoarte", icon: "📊" },
   { href: "/dashboard/goals", label: "Obiective", icon: "🎯" },
+  { href: "/dashboard/budgets", label: "Bugete", icon: "💰" },
 ];
 
 export default function DashboardNav() {

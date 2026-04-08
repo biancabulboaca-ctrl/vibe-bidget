@@ -10,7 +10,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id } = await params;
-    const { name, targetAmount, currentAmount, deadline, icon, color, savingsMethod } = await request.json();
+    const { name, targetAmount, currentAmount, deadline, icon, color, savingsMethod, notes } = await request.json();
 
     const [goal] = await db
       .update(schema.goals)
@@ -22,6 +22,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         icon,
         color,
         savingsMethod: savingsMethod || null,
+        notes: notes || null,
         updatedAt: new Date(),
       })
       .where(and(eq(schema.goals.id, id), eq(schema.goals.userId, authUser.id)))

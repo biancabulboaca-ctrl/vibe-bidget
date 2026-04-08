@@ -222,6 +222,24 @@ export default async function DashboardPage() {
             <span className="text-2xl">📊</span>
             <span className="text-sm font-bold" style={{ color: "#5eead4" }}>Rapoarte</span>
           </Link>
+          <Link href="/dashboard/goals"
+            className="rounded-2xl p-4 flex items-center gap-3 transition-all hover:scale-105"
+            style={{
+              background: "rgba(20,184,166,0.1)",
+              border: "1px solid rgba(20,184,166,0.2)",
+            }}>
+            <span className="text-2xl">🎯</span>
+            <span className="text-sm font-bold" style={{ color: "#2dd4bf" }}>Obiective</span>
+          </Link>
+          <Link href="/dashboard/budgets"
+            className="rounded-2xl p-4 flex items-center gap-3 transition-all hover:scale-105"
+            style={{
+              background: "rgba(34,197,94,0.1)",
+              border: "1px solid rgba(34,197,94,0.2)",
+            }}>
+            <span className="text-2xl">💰</span>
+            <span className="text-sm font-bold" style={{ color: "#4ade80" }}>Bugete</span>
+          </Link>
         </div>
 
         {/* Secțiune tranzacții */}

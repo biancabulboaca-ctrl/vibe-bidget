@@ -41,6 +41,28 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const supabase = await createClient();
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { id } = await params;
+    const { isRecurring } = await request.json();
+
+    const [transaction] = await db
+      .update(schema.transactions)
+      .set({ isRecurring, updatedAt: new Date() })
+      .where(and(eq(schema.transactions.id, id), eq(schema.transactions.userId, authUser.id)))
+      .returning();
+
+    return NextResponse.json({ transaction });
+  } catch (error) {
+    console.error("[TRANSACTIONS_PATCH] Error:", error);
+    return NextResponse.json({ error: "Eroare internă server" }, { status: 500 });
+  }
+}
+
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const supabase = await createClient();

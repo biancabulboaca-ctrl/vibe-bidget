@@ -17,13 +17,15 @@ export async function GET(request: NextRequest) {
     const dateFrom = searchParams.get("dateFrom") || "";
     const dateTo = searchParams.get("dateTo") || "";
     const uncategorized = searchParams.get("uncategorized") === "true";
+    const recurring = searchParams.get("recurring") === "true";
 
     const conditions = [eq(schema.transactions.userId, authUser.id)];
 
     if (dateFrom) conditions.push(gte(schema.transactions.date, dateFrom));
     if (dateTo) conditions.push(lte(schema.transactions.date, dateTo));
     if (bankId) conditions.push(eq(schema.transactions.bankId, bankId));
-    if (uncategorized) conditions.push(isNull(schema.transactions.categoryId));
+    if (recurring) conditions.push(eq(schema.transactions.isRecurring, true));
+    else if (uncategorized) conditions.push(isNull(schema.transactions.categoryId));
     else if (categoryId) conditions.push(eq(schema.transactions.categoryId, categoryId));
     if (search) conditions.push(ilike(schema.transactions.description, `%${search}%`));
 
@@ -36,6 +38,7 @@ export async function GET(request: NextRequest) {
         currency: schema.transactions.currency,
         bankId: schema.transactions.bankId,
         categoryId: schema.transactions.categoryId,
+        isRecurring: schema.transactions.isRecurring,
         bankName: schema.banks.name,
         bankColor: schema.banks.color,
         categoryName: schema.categories.name,

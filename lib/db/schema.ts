@@ -172,6 +172,7 @@ export const transactions = pgTable("transactions", {
   description: text("description").notNull(), // "MEGA IMAGE 123"
   amount: decimal("amount", { precision: 10, scale: 2, mode: 'number' }).notNull(), // -45.50 (negativ = cheltuială, pozitiv = venit)
   currency: text("currency").notNull().default("RON"), // RON, EUR, USD
+  isRecurring: boolean("is_recurring").default(false), // Tranzacție recurentă (Netflix, chirie, etc.)
   createdAt: timestamp("created_at")
     .notNull()
     .defaultNow(),
@@ -213,7 +214,27 @@ export const userKeywords = pgTable("user_keywords", {
 });
 
 /**
- * TABELA 7: GOALS (Obiective de economisire)
+ * TABELA 7: BUDGETS (Bugete pe categorie)
+ *
+ * CE STOCĂM:
+ * - id: Identificator unic
+ * - userId: La cine aparține bugetul
+ * - categoryId: Categoria bugetată
+ * - amount: Plafonul lunar (ex: 2000 RON)
+ * - period: Perioada (monthly)
+ */
+export const budgets = pgTable("budgets", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  categoryId: text("category_id").notNull().references(() => categories.id, { onDelete: "cascade" }),
+  amount: decimal("amount", { precision: 10, scale: 2, mode: 'number' }).notNull(),
+  period: text("period").notNull().default("monthly"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
+ * TABELA 8: GOALS (Obiective de economisire)
  *
  * CE STOCĂM:
  * - id: Identificator unic
@@ -240,6 +261,7 @@ export const goals = pgTable("goals", {
   icon: text("icon").notNull().default("🎯"),
   color: text("color").notNull().default("#14b8a6"),
   savingsMethod: text("savings_method"),
+  notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -270,3 +292,6 @@ export type NewUserKeyword = typeof userKeywords.$inferInsert;
 
 export type Goal = typeof goals.$inferSelect;
 export type NewGoal = typeof goals.$inferInsert;
+
+export type Budget = typeof budgets.$inferSelect;
+export type NewBudget = typeof budgets.$inferInsert;

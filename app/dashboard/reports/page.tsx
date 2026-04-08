@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardNav from "@/app/dashboard/nav";
 import {
-  PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
 } from "recharts";
 
 type Period = "current-month" | "3months" | "6months" | "all";
@@ -59,6 +59,11 @@ function formatAmount(amount: number) {
   }).format(amount) + " RON";
 }
 
+function formatShort(amount: number) {
+  if (amount >= 1000) return `${(amount / 1000).toFixed(1)}k`;
+  return amount.toFixed(0);
+}
+
 interface PieTooltipProps {
   active?: boolean;
   payload?: Array<{ name: string; value: number; payload: CategoryData }>;
@@ -72,7 +77,7 @@ function PieTooltipContent({ active, payload }: PieTooltipProps) {
       style={{ background: "rgba(15,23,42,0.95)", border: "1px solid rgba(255,255,255,0.12)", color: "#ffffff" }}>
       <p className="font-bold">{d.categoryIcon} {d.categoryName}</p>
       <p style={{ color: "#f87171" }}>{formatAmount(d.total)}</p>
-      <p style={{ color: "rgba(255,255,255,0.5)" }}>{d.percentage}% din cheltuieli</p>
+      <p style={{ color: "rgba(255,255,255,0.5)" }}>{d.percentage}%</p>
     </div>
   );
 }
@@ -96,33 +101,12 @@ function BarTooltipContent({ active, payload, label }: BarTooltipProps) {
   );
 }
 
-function renderPieLabel(props: {
-  cx?: number; cy?: number; midAngle?: number;
-  outerRadius?: number; percent?: number;
-}) {
-  const { cx = 0, cy = 0, midAngle = 0, outerRadius = 0, percent = 0 } = props;
-  const pct = Math.round(percent * 100);
-  if (pct <= 3) return null;
-  const RADIAN = Math.PI / 180;
-  const radius = outerRadius + 18;
-  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-  const y = cy + radius * Math.sin(-midAngle * RADIAN);
-  return (
-    <text x={x} y={y} fill="rgba(255,255,255,0.7)"
-      textAnchor={x > cx ? "start" : "end"}
-      dominantBaseline="central" fontSize={11} fontWeight="bold">
-      {`${pct}%`}
-    </text>
-  );
-}
-
 export default function ReportsPage() {
   const router = useRouter();
   const [period, setPeriod] = useState<Period>("3months");
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // AI Coach
   const [coachData, setCoachData] = useState<CoachData | null>(null);
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachError, setCoachError] = useState<string | null>(null);
@@ -137,8 +121,6 @@ export default function ReportsPage() {
         if (res.status === 401) { router.push("/login"); return; }
         const json = await res.json();
         setData(json);
-      } catch (err) {
-        console.error("[REPORTS] Fetch error:", err);
       } finally {
         setLoading(false);
       }
@@ -204,9 +186,7 @@ export default function ReportsPage() {
         }}>
         <div className="container mx-auto px-4 py-4 flex items-center gap-4">
           <Link href="/dashboard" className="text-sm font-bold"
-            style={{ color: "rgba(255,255,255,0.5)" }}>
-            ← Dashboard
-          </Link>
+            style={{ color: "rgba(255,255,255,0.5)" }}>← Dashboard</Link>
           <div className="flex items-center gap-2">
             <span className="text-xl">📊</span>
             <span className="text-lg font-bold" style={{ color: "#ffffff" }}>Rapoarte</span>
@@ -215,15 +195,13 @@ export default function ReportsPage() {
       </header>
       <DashboardNav />
 
-      <main className="container mx-auto px-4 py-8 relative z-10 max-w-6xl">
+      <main className="container mx-auto px-4 py-6 relative z-10 max-w-6xl">
 
-        {/* Filtre perioadă + buton AI */}
+        {/* Filtre + buton AI */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div className="flex flex-wrap gap-2">
             {PERIODS.map((p) => (
-              <button
-                key={p.value}
-                onClick={() => setPeriod(p.value)}
+              <button key={p.value} onClick={() => setPeriod(p.value)}
                 className="px-4 py-2 rounded-xl text-sm font-bold transition-all"
                 style={period === p.value ? {
                   background: "linear-gradient(135deg, #14b8a6, #f97316)",
@@ -240,30 +218,16 @@ export default function ReportsPage() {
           </div>
 
           {data && data.summary.transactionCount > 0 && (
-            <button
-              onClick={handleAnalyze}
-              disabled={coachLoading}
+            <button onClick={handleAnalyze} disabled={coachLoading}
               className="px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2"
               style={{
-                background: coachLoading
-                  ? "rgba(139,92,246,0.2)"
-                  : "linear-gradient(135deg, #7c3aed, #4f46e5)",
+                background: coachLoading ? "rgba(139,92,246,0.2)" : "linear-gradient(135deg, #7c3aed, #4f46e5)",
                 color: "#ffffff",
                 boxShadow: coachLoading ? "none" : "0 4px 15px rgba(124,58,237,0.35)",
                 opacity: coachLoading ? 0.7 : 1,
-                cursor: coachLoading ? "wait" : "pointer",
               }}>
-              {coachLoading ? (
-                <>
-                  <span className="animate-spin inline-block">⏳</span>
-                  <span>Analizez...</span>
-                </>
-              ) : (
-                <>
-                  <span>🤖</span>
-                  <span>Analizează cheltuielile</span>
-                </>
-              )}
+              {coachLoading ? <><span className="animate-spin inline-block">⏳</span><span>Analizez...</span></>
+                : <><span>🤖</span><span>Analizează cheltuielile</span></>}
             </button>
           )}
         </div>
@@ -275,58 +239,31 @@ export default function ReportsPage() {
         ) : !data || data.summary.transactionCount === 0 ? (
           <div className="py-24 text-center">
             <span className="text-5xl">📊</span>
-            <p className="font-bold mt-4 text-lg" style={{ color: "rgba(255,255,255,0.6)" }}>
-              Fără date disponibile
-            </p>
+            <p className="font-bold mt-4 text-lg" style={{ color: "rgba(255,255,255,0.6)" }}>Fără date disponibile</p>
             <p className="text-sm mt-2" style={{ color: "rgba(255,255,255,0.3)" }}>
               Nu există tranzacții pentru perioada selectată.
             </p>
           </div>
         ) : (
           <>
-            {/* Carduri summary */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              {/* Cheltuieli */}
-              <div className="rounded-2xl p-5" style={{
-                background: "rgba(248,113,113,0.08)",
-                border: "1px solid rgba(248,113,113,0.25)",
-              }}>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold uppercase"
-                    style={{ color: "rgba(248,113,113,0.7)", letterSpacing: "0.08em" }}>
-                    Total cheltuieli
-                  </span>
+            {/* Carduri sumar */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+              <div className="rounded-2xl p-5" style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)" }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase" style={{ color: "rgba(248,113,113,0.7)", letterSpacing: "0.08em" }}>Cheltuieli totale</span>
                   <span className="text-xl">💸</span>
                 </div>
-                <p className="text-3xl font-bold" style={{ color: "#f87171" }}>
-                  -{formatAmount(data.summary.totalExpenses)}
-                </p>
-                <p className="text-xs mt-2" style={{ color: "rgba(255,255,255,0.3)" }}>
-                  {data.byCategory.length} {data.byCategory.length === 1 ? "categorie" : "categorii"}
-                </p>
+                <p className="text-2xl font-bold" style={{ color: "#f87171" }}>-{formatAmount(data.summary.totalExpenses)}</p>
+                <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.3)" }}>{data.byCategory.length} categorii</p>
               </div>
-
-              {/* Venituri */}
-              <div className="rounded-2xl p-5" style={{
-                background: "rgba(74,222,128,0.08)",
-                border: "1px solid rgba(74,222,128,0.25)",
-              }}>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold uppercase"
-                    style={{ color: "rgba(74,222,128,0.7)", letterSpacing: "0.08em" }}>
-                    Total venituri
-                  </span>
+              <div className="rounded-2xl p-5" style={{ background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.25)" }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase" style={{ color: "rgba(74,222,128,0.7)", letterSpacing: "0.08em" }}>Venituri totale</span>
                   <span className="text-xl">💰</span>
                 </div>
-                <p className="text-3xl font-bold" style={{ color: "#4ade80" }}>
-                  +{formatAmount(data.summary.totalIncome)}
-                </p>
-                <p className="text-xs mt-2" style={{ color: "rgba(255,255,255,0.3)" }}>
-                  {data.summary.transactionCount} tranzacții totale
-                </p>
+                <p className="text-2xl font-bold" style={{ color: "#4ade80" }}>+{formatAmount(data.summary.totalIncome)}</p>
+                <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.3)" }}>{data.summary.transactionCount} tranzacții</p>
               </div>
-
-              {/* Balanță */}
               {(() => {
                 const positive = data.summary.balance >= 0;
                 return (
@@ -334,18 +271,14 @@ export default function ReportsPage() {
                     background: positive ? "rgba(74,222,128,0.08)" : "rgba(248,113,113,0.08)",
                     border: `1px solid ${positive ? "rgba(74,222,128,0.25)" : "rgba(248,113,113,0.25)"}`,
                   }}>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-bold uppercase"
-                        style={{ color: positive ? "rgba(74,222,128,0.7)" : "rgba(248,113,113,0.7)", letterSpacing: "0.08em" }}>
-                        Balanță
-                      </span>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold uppercase" style={{ color: positive ? "rgba(74,222,128,0.7)" : "rgba(248,113,113,0.7)", letterSpacing: "0.08em" }}>Balanță</span>
                       <span className="text-xl">{positive ? "📈" : "📉"}</span>
                     </div>
-                    <p className="text-3xl font-bold"
-                      style={{ color: positive ? "#4ade80" : "#f87171" }}>
+                    <p className="text-2xl font-bold" style={{ color: positive ? "#4ade80" : "#f87171" }}>
                       {positive ? "+" : ""}{formatAmount(data.summary.balance)}
                     </p>
-                    <p className="text-xs mt-2" style={{ color: "rgba(255,255,255,0.3)" }}>
+                    <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.3)" }}>
                       {positive ? "Economii nete" : "Deficit net"}
                     </p>
                   </div>
@@ -353,226 +286,192 @@ export default function ReportsPage() {
               })()}
             </div>
 
-            {/* Grafice */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-              {/* Pie Chart — cheltuieli pe categorii */}
-              <div className="rounded-2xl p-6" style={cardStyle}>
-                <div className="mb-4">
-                  <p className="font-bold" style={{ color: "#ffffff" }}>Cheltuieli pe categorii</p>
+            {/* Top Spending Categories */}
+            <div className="rounded-2xl p-5 mb-6" style={cardStyle}>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <p className="font-bold" style={{ color: "#ffffff" }}>Top categorii cheltuieli</p>
                   <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
-                    Distribuția cheltuielilor pe categorii
+                    Unde se duc cei mai mulți bani
                   </p>
                 </div>
+              </div>
 
-                {data.byCategory.length === 0 ? (
-                  <div className="py-16 text-center text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
-                    Nicio cheltuială în această perioadă
-                  </div>
-                ) : (
-                  <>
-                    <ResponsiveContainer width="100%" height={280}>
+              {data.byCategory.length === 0 ? (
+                <div className="py-10 text-center text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
+                  Nicio cheltuială în această perioadă
+                </div>
+              ) : (
+                <div className="flex flex-col lg:flex-row gap-6 items-start">
+                  {/* Pie chart */}
+                  <div className="w-full lg:w-64 flex-shrink-0">
+                    <ResponsiveContainer width="100%" height={200}>
                       <PieChart>
                         <Pie
                           data={data.byCategory as unknown as Record<string, unknown>[]}
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={100}
-                          innerRadius={40}
-                          dataKey="total"
-                          nameKey="categoryName"
-                          label={renderPieLabel}
+                          cx="50%" cy="50%"
+                          outerRadius={90} innerRadius={45}
+                          dataKey="total" nameKey="categoryName"
                           labelLine={false}>
                           {data.byCategory.map((entry, index) => (
                             <Cell key={index} fill={entry.categoryColor} />
                           ))}
                         </Pie>
                         <Tooltip content={<PieTooltipContent />} />
-                        <Legend
-                          formatter={(value) => (
-                            <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "12px" }}>{value}</span>
-                          )}
-                        />
                       </PieChart>
                     </ResponsiveContainer>
+                  </div>
 
-                    {/* Lista categorii */}
-                    <div className="mt-2 flex flex-col gap-2">
-                      {data.byCategory.map((cat, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                              style={{ background: cat.categoryColor }} />
-                            <span style={{ color: "rgba(255,255,255,0.7)" }}>
-                              {cat.categoryIcon} {cat.categoryName}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span style={{ color: "rgba(255,255,255,0.4)" }}>{cat.percentage}%</span>
-                            <span className="font-bold" style={{ color: "#f87171" }}>
-                              -{formatAmount(cat.total)}
-                            </span>
+                  {/* Lista categorii */}
+                  <div className="flex-1 flex flex-col gap-2 w-full">
+                    {data.byCategory.slice(0, 8).map((cat, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ background: cat.categoryColor }} />
+                        <span className="text-sm flex-1" style={{ color: "rgba(255,255,255,0.75)" }}>
+                          {cat.categoryIcon} {cat.categoryName}
+                        </span>
+                        <div className="flex-1 mx-2 hidden sm:block">
+                          <div className="h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+                            <div className="h-1.5 rounded-full"
+                              style={{ width: `${cat.percentage}%`, background: cat.categoryColor, opacity: 0.8 }} />
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Bar Chart — evoluție lunară */}
-              <div className="rounded-2xl p-6" style={cardStyle}>
-                <div className="mb-4">
-                  <p className="font-bold" style={{ color: "#ffffff" }}>Evoluție lunară</p>
-                  <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
-                    Cheltuieli și venituri pe luni
-                  </p>
-                </div>
-
-                {data.byMonth.length === 0 ? (
-                  <div className="py-16 text-center text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
-                    Nicio dată pentru această perioadă
+                        <span className="text-xs font-bold shrink-0" style={{ color: "rgba(255,255,255,0.4)" }}>
+                          {cat.percentage}%
+                        </span>
+                        <span className="text-sm font-bold shrink-0" style={{ color: "#f87171" }}>
+                          -{formatAmount(cat.total)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={320}>
-                    <BarChart data={data.byMonth} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }}
-                        axisLine={{ stroke: "rgba(255,255,255,0.1)" }}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v.toFixed(0)}`}
-                        width={40}
-                      />
-                      <Tooltip content={<BarTooltipContent />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
-                      <Legend
-                        formatter={(value) => (
-                          <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "12px" }}>{value}</span>
-                        )}
-                      />
-                      <Bar dataKey="expenses" name="Cheltuieli" fill="#f87171" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="income" name="Venituri" fill="#2dd4bf" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-
+                </div>
+              )}
             </div>
 
-            {/* AI Coach Card */}
+            {/* Grafice separate: Venituri | Cheltuieli */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+
+              {/* Venituri pe luni */}
+              <div className="rounded-2xl p-5" style={cardStyle}>
+                <div className="mb-4">
+                  <p className="font-bold" style={{ color: "#ffffff" }}>Venituri</p>
+                  <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>Evoluție lunară</p>
+                </div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={data.byMonth} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <XAxis dataKey="label" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }}
+                      axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }}
+                      axisLine={false} tickLine={false}
+                      tickFormatter={formatShort} width={38} />
+                    <Tooltip content={<BarTooltipContent />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+                    <Bar dataKey="income" name="Venituri" fill="#2dd4bf" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Cheltuieli pe luni */}
+              <div className="rounded-2xl p-5" style={cardStyle}>
+                <div className="mb-4">
+                  <p className="font-bold" style={{ color: "#ffffff" }}>Cheltuieli</p>
+                  <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>Evoluție lunară</p>
+                </div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={data.byMonth} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <XAxis dataKey="label" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }}
+                      axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }}
+                      axisLine={false} tickLine={false}
+                      tickFormatter={formatShort} width={38} />
+                    <Tooltip content={<BarTooltipContent />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+                    <Bar dataKey="expenses" name="Cheltuieli" fill="#f87171" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* AI Coach */}
             {coachError && (
-              <div className="mt-6 rounded-2xl px-5 py-4 text-sm"
+              <div className="mb-5 rounded-2xl px-5 py-4 text-sm"
                 style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: "#fca5a5" }}>
                 ⚠ {coachError}
               </div>
             )}
 
             {coachLoading && (
-              <div className="mt-6 rounded-2xl p-8 text-center"
+              <div className="rounded-2xl p-8 text-center"
                 style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.2)" }}>
                 <span className="text-4xl animate-pulse">🤖</span>
-                <p className="mt-3 font-bold" style={{ color: "#a78bfa" }}>
-                  Claude analizează cheltuielile tale...
-                </p>
-                <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.3)" }}>
-                  Durează câteva secunde
-                </p>
+                <p className="mt-3 font-bold" style={{ color: "#a78bfa" }}>Claude analizează cheltuielile tale...</p>
+                <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.3)" }}>Durează câteva secunde</p>
               </div>
             )}
 
             {coachData && (
-              <div className="mt-6 rounded-2xl p-6"
+              <div className="rounded-2xl p-6"
                 style={{ background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.25)" }}>
-
-                {/* Header */}
-                <div className="flex items-center gap-3 mb-6">
+                <div className="flex items-center gap-3 mb-5">
                   <span className="text-3xl">🤖</span>
                   <div>
                     <p className="font-bold text-lg" style={{ color: "#ffffff" }}>AI Financial Coach</p>
-                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-                      Analiză bazată pe datele tale reale
-                    </p>
+                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>Analiză bazată pe datele tale reale</p>
                   </div>
                 </div>
 
                 {/* Health Score */}
-                <div className="rounded-xl p-4 mb-5"
+                <div className="rounded-xl p-4 mb-4"
                   style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-bold uppercase"
-                      style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>
-                      Health Score
-                    </span>
+                      style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>Health Score</span>
                     <span className="text-3xl font-bold"
-                      style={{
-                        color: coachData.healthScore >= 70 ? "#4ade80"
-                          : coachData.healthScore >= 50 ? "#fbbf24"
-                          : "#f87171",
-                      }}>
+                      style={{ color: coachData.healthScore >= 70 ? "#4ade80" : coachData.healthScore >= 50 ? "#fbbf24" : "#f87171" }}>
                       {coachData.healthScore}<span className="text-lg">/100</span>
                     </span>
                   </div>
-                  {/* Progress bar */}
-                  <div className="h-2 rounded-full mb-3"
-                    style={{ background: "rgba(255,255,255,0.08)" }}>
-                    <div className="h-2 rounded-full transition-all"
-                      style={{
-                        width: `${coachData.healthScore}%`,
-                        background: coachData.healthScore >= 70
-                          ? "linear-gradient(90deg, #22c55e, #4ade80)"
-                          : coachData.healthScore >= 50
-                          ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
-                          : "linear-gradient(90deg, #ef4444, #f87171)",
-                      }} />
+                  <div className="h-2 rounded-full mb-3" style={{ background: "rgba(255,255,255,0.08)" }}>
+                    <div className="h-2 rounded-full" style={{
+                      width: `${coachData.healthScore}%`,
+                      background: coachData.healthScore >= 70
+                        ? "linear-gradient(90deg, #22c55e, #4ade80)"
+                        : coachData.healthScore >= 50
+                        ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
+                        : "linear-gradient(90deg, #ef4444, #f87171)",
+                    }} />
                   </div>
-                  <p className="text-sm" style={{ color: "rgba(255,255,255,0.6)" }}>
-                    {coachData.healthExplanation}
-                  </p>
+                  <p className="text-sm" style={{ color: "rgba(255,255,255,0.6)" }}>{coachData.healthExplanation}</p>
                 </div>
 
                 {/* Observație pozitivă */}
-                <div className="rounded-xl p-4 mb-5 flex gap-3"
+                <div className="rounded-xl p-4 mb-4 flex gap-3"
                   style={{ background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.2)" }}>
                   <span className="text-xl flex-shrink-0">✅</span>
                   <div>
                     <p className="text-xs font-bold uppercase mb-1"
-                      style={{ color: "rgba(74,222,128,0.7)", letterSpacing: "0.08em" }}>
-                      Ce faci bine
-                    </p>
-                    <p className="text-sm" style={{ color: "rgba(255,255,255,0.75)" }}>
-                      {coachData.positiveObservation}
-                    </p>
+                      style={{ color: "rgba(74,222,128,0.7)", letterSpacing: "0.08em" }}>Ce faci bine</p>
+                    <p className="text-sm" style={{ color: "rgba(255,255,255,0.75)" }}>{coachData.positiveObservation}</p>
                   </div>
                 </div>
 
                 {/* Sfaturi */}
-                <div>
-                  <p className="text-xs font-bold uppercase mb-3"
-                    style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>
-                    Sfaturi personalizate
-                  </p>
-                  <div className="flex flex-col gap-3">
-                    {coachData.tips.map((tip, i) => (
-                      <div key={i} className="flex gap-3 rounded-xl p-3"
-                        style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                        <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-                          style={{ background: "rgba(124,58,237,0.3)", color: "#a78bfa" }}>
-                          {i + 1}
-                        </span>
-                        <p className="text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>{tip}</p>
-                      </div>
-                    ))}
-                  </div>
+                <p className="text-xs font-bold uppercase mb-3"
+                  style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>Sfaturi personalizate</p>
+                <div className="flex flex-col gap-3">
+                  {coachData.tips.map((tip, i) => (
+                    <div key={i} className="flex gap-3 rounded-xl p-3"
+                      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+                        style={{ background: "rgba(124,58,237,0.3)", color: "#a78bfa" }}>{i + 1}</span>
+                      <p className="text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>{tip}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
-
           </>
         )}
       </main>

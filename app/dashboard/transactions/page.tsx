@@ -13,6 +13,7 @@ interface Transaction {
   currency: string;
   bankId: string | null;
   categoryId: string | null;
+  isRecurring: boolean | null;
   bankName: string | null;
   bankColor: string | null;
   categoryName: string | null;
@@ -63,8 +64,9 @@ export default function TransactionsPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Filtru necategorizate
+  // Filtre speciale
   const [uncategorized, setUncategorized] = useState(false);
+  const [recurringFilter, setRecurringFilter] = useState(false);
 
   // Editare / ștergere / succes
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -121,7 +123,8 @@ export default function TransactionsPage() {
       const params = new URLSearchParams();
       if (searchDebounced) params.set("search", searchDebounced);
       if (bankId) params.set("bankId", bankId);
-      if (uncategorized) params.set("uncategorized", "true");
+      if (recurringFilter) params.set("recurring", "true");
+      else if (uncategorized) params.set("uncategorized", "true");
       else if (categoryId) params.set("categoryId", categoryId);
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
@@ -133,7 +136,7 @@ export default function TransactionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchDebounced, bankId, categoryId, uncategorized, dateFrom, dateTo, router]);
+  }, [searchDebounced, bankId, categoryId, uncategorized, recurringFilter, dateFrom, dateTo, router]);
 
   useEffect(() => {
     fetchTransactions();
@@ -152,7 +155,22 @@ export default function TransactionsPage() {
   };
 
   const clearFilters = () => {
-    setSearch(""); setBankId(""); setCategoryId(""); setDateFrom(""); setDateTo(""); setUncategorized(false);
+    setSearch(""); setBankId(""); setCategoryId(""); setDateFrom(""); setDateTo(""); setUncategorized(false); setRecurringFilter(false);
+  };
+
+  const handleToggleRecurring = async (t: Transaction) => {
+    const newVal = !t.isRecurring;
+    // Optimist update
+    setTransactions((prev) => prev.map((x) => x.id === t.id ? { ...x, isRecurring: newVal } : x));
+    await fetch(`/api/transactions/${t.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isRecurring: newVal }),
+    });
+    // Dacă suntem în view recurente și am dezactivat, scoatem din listă
+    if (recurringFilter && !newVal) {
+      setTransactions((prev) => prev.filter((x) => x.id !== t.id));
+    }
   };
 
   const openEdit = (t: Transaction) => {
@@ -174,7 +192,7 @@ export default function TransactionsPage() {
     setDeletingId(null);
   };
 
-  const hasFilters = search || bankId || categoryId || dateFrom || dateTo || uncategorized;
+  const hasFilters = search || bankId || categoryId || dateFrom || dateTo || uncategorized || recurringFilter;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -341,7 +359,7 @@ export default function TransactionsPage() {
                 Filtre
               </span>
               <button
-                onClick={() => { setUncategorized(!uncategorized); setCategoryId(""); }}
+                onClick={() => { setUncategorized(!uncategorized); setCategoryId(""); setRecurringFilter(false); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
                 style={uncategorized ? {
                   background: "rgba(251,191,36,0.2)",
@@ -353,6 +371,20 @@ export default function TransactionsPage() {
                   color: "rgba(255,255,255,0.45)",
                 }}>
                 ⚠ Necategorizate
+              </button>
+              <button
+                onClick={() => { setRecurringFilter(!recurringFilter); setUncategorized(false); setCategoryId(""); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                style={recurringFilter ? {
+                  background: "rgba(139,92,246,0.2)",
+                  border: "1px solid rgba(139,92,246,0.4)",
+                  color: "#a78bfa",
+                } : {
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  color: "rgba(255,255,255,0.45)",
+                }}>
+                🔁 Recurente
               </button>
               <button
                 onClick={handleRecategorize}
@@ -411,14 +443,59 @@ export default function TransactionsPage() {
           </div>
         </div>
 
+        {/* View grupat pentru Recurente */}
+        {recurringFilter && transactions.length > 0 && (() => {
+          const groups = new Map<string, { items: Transaction[] }>();
+          for (const t of transactions) {
+            const key = t.description.toLowerCase().trim();
+            if (!groups.has(key)) groups.set(key, { items: [] });
+            groups.get(key)!.items.push(t);
+          }
+          const sorted = Array.from(groups.entries())
+            .sort((a, b) => b[1].items.length - a[1].items.length);
+          return (
+            <div className="mb-6">
+              <p className="text-xs font-bold uppercase mb-3" style={{ color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em" }}>
+                Sumar recurente — {sorted.length} tipuri, {transactions.length} tranzacții
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {sorted.map(([key, { items }]) => {
+                  const t = items[0];
+                  const avg = items.reduce((s, x) => s + Math.abs(Number(x.amount)), 0) / items.length;
+                  return (
+                    <div key={key} className="rounded-xl px-4 py-3 flex items-center gap-3"
+                      style={{ background: "rgba(139,92,246,0.08)", border: "1px solid rgba(139,92,246,0.2)" }}>
+                      <span className="text-xl shrink-0">{t.categoryIcon || "🔁"}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold truncate" style={{ color: "#ffffff" }} title={t.description}>
+                          {t.description}
+                        </p>
+                        <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>
+                          {items.length}× · ~{new Intl.NumberFormat("ro-RO", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(avg)} {t.currency}/lună
+                        </p>
+                      </div>
+                      {t.categoryName && (
+                        <span className="shrink-0 text-xs px-2 py-0.5 rounded-lg font-bold"
+                          style={{ background: (t.categoryColor || "#6366f1") + "22", color: t.categoryColor || "#6366f1" }}>
+                          {t.categoryName}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Tabel */}
         <div className="rounded-2xl overflow-hidden"
           style={{
             background: "rgba(255,255,255,0.05)",
             border: "1px solid rgba(255,255,255,0.08)",
           }}>
-          {/* Header tabel */}
-          <div className="grid items-center px-5 py-3 text-xs font-bold uppercase"
+          {/* Header tabel — doar desktop */}
+          <div className="hidden md:grid items-center px-5 py-3 text-xs font-bold uppercase"
             style={{
               gridTemplateColumns: "110px 1fr 130px 140px 120px 170px",
               color: "rgba(255,255,255,0.4)",
@@ -451,21 +528,84 @@ export default function TransactionsPage() {
           ) : (
             transactions.map((t, i) => (
               <div key={t.id}
-                className="grid items-center px-5 py-4"
-                style={{
-                  gridTemplateColumns: "110px 1fr 130px 140px 120px 170px",
-                  borderBottom: i < transactions.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none",
-                }}>
+                style={{ borderBottom: i < transactions.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+
+                {/* Mobile layout */}
+                <div className="md:hidden px-4 py-3">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <span className="text-sm font-bold truncate flex-1" style={{ color: "#ffffff" }}
+                      title={t.description}>
+                      {t.description}
+                    </span>
+                    <span className="text-sm font-bold shrink-0"
+                      style={{ color: t.amount >= 0 ? "#2dd4bf" : "#f87171" }}>
+                      {formatAmount(t.amount, t.currency)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{formatDate(t.date)}</span>
+                    {t.categoryName && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold"
+                        style={{ background: (t.categoryColor || "#6366f1") + "22", color: t.categoryColor || "#6366f1" }}>
+                        {t.categoryIcon} {t.categoryName}
+                      </span>
+                    )}
+                    {t.bankName && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold"
+                        style={{ background: (t.bankColor || "#6366f1") + "22", color: t.bankColor || "#6366f1" }}>
+                        {t.bankName}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => handleToggleRecurring(t)}
+                      className="px-2 py-1 rounded-lg text-xs font-bold"
+                      style={t.isRecurring ? {
+                        background: "rgba(139,92,246,0.2)",
+                        color: "#a78bfa",
+                        border: "1px solid rgba(139,92,246,0.4)",
+                      } : {
+                        background: "rgba(255,255,255,0.05)",
+                        color: "rgba(255,255,255,0.3)",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                      }}>
+                      🔁
+                    </button>
+                    <button onClick={() => openEdit(t)}
+                      className="px-3 py-1 rounded-lg text-xs font-bold"
+                      style={{ background: "rgba(20,184,166,0.15)", color: "#2dd4bf", border: "1px solid rgba(20,184,166,0.3)" }}>
+                      Editează
+                    </button>
+                    <button onClick={() => setDeletingId(t.id)}
+                      className="px-3 py-1 rounded-lg text-xs font-bold"
+                      style={{ background: "rgba(239,68,68,0.12)", color: "#f87171", border: "1px solid rgba(239,68,68,0.25)" }}>
+                      Șterge
+                    </button>
+                  </div>
+                </div>
+
+                {/* Desktop layout */}
+                <div className="hidden md:grid items-center px-5 py-4"
+                  style={{ gridTemplateColumns: "110px 1fr 130px 140px 120px 170px" }}>
                 {/* Dată */}
                 <span className="text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>
                   {formatDate(t.date)}
                 </span>
 
                 {/* Descriere */}
-                <span className="text-sm font-bold pr-4 truncate" style={{ color: "#ffffff" }}
-                  title={t.description}>
-                  {t.description}
-                </span>
+                <div className="flex items-center gap-2 pr-4 min-w-0">
+                  <span className="text-sm font-bold truncate" style={{ color: "#ffffff" }}
+                    title={t.description}>
+                    {t.description}
+                  </span>
+                  {t.isRecurring && (
+                    <span className="shrink-0 text-xs px-1.5 py-0.5 rounded font-bold"
+                      style={{ background: "rgba(139,92,246,0.2)", color: "#a78bfa", border: "1px solid rgba(139,92,246,0.3)" }}>
+                      🔁
+                    </span>
+                  )}
+                </div>
 
                 {/* Bancă */}
                 <div>
@@ -508,6 +648,21 @@ export default function TransactionsPage() {
 
                 {/* Acțiuni */}
                 <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => handleToggleRecurring(t)}
+                    title={t.isRecurring ? "Elimină din recurente" : "Marchează ca recurentă"}
+                    className="px-2 py-1.5 rounded-lg text-xs font-bold transition-all"
+                    style={t.isRecurring ? {
+                      background: "rgba(139,92,246,0.2)",
+                      color: "#a78bfa",
+                      border: "1px solid rgba(139,92,246,0.4)",
+                    } : {
+                      background: "rgba(255,255,255,0.05)",
+                      color: "rgba(255,255,255,0.3)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                    }}>
+                    🔁
+                  </button>
                   <button onClick={() => openEdit(t)}
                     className="px-3 py-1.5 rounded-lg text-xs font-bold"
                     style={{ background: "rgba(20,184,166,0.15)", color: "#2dd4bf", border: "1px solid rgba(20,184,166,0.3)" }}>
@@ -519,7 +674,8 @@ export default function TransactionsPage() {
                     Șterge
                   </button>
                 </div>
-              </div>
+                </div>{/* end desktop row */}
+              </div>{/* end wrapper */}
             ))
           )}
         </div>
