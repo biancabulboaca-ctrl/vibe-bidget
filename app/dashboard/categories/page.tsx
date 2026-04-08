@@ -22,7 +22,7 @@ const COLORS = [
 ];
 
 const ICONS_INCOME = ["💰", "💵", "💼", "📈", "🏠", "🎁", "💳", "🏦", "💹", "🤝"];
-const ICONS_EXPENSE = ["🛒", "🍔", "🍽️", "🚗", "🏠", "💊", "🎬", "✈️", "👗", "📱", "⚡", "🎓", "🏫", "🎒", "🖍️", "🐾", "💪", "🎮", "☕"];
+const ICONS_EXPENSE = ["🛒", "🍔", "🍽️", "🚗", "🏠", "💊", "🎬", "✈️", "👗", "📱", "⚡", "🎓", "🏫", "🎒", "🖍️", "🐾", "💪", "🎮", "☕", "🎭", "🎪", "🎵", "🎤", "🍿", "🎻"];
 
 export default function CategoriesPage() {
   const router = useRouter();
