@@ -73,6 +73,42 @@ export default async function DashboardPage() {
     .where(eq(schema.transactions.userId, user.id));
   const totalTranzactii = Number(totalTranzactiiResult[0]?.count ?? 0);
 
+  // Rata de economisire
+  const rataEconomisire = venituriLuna > 0
+    ? Math.round(((venituriLuna - cheltuieliLuna) / venituriLuna) * 100)
+    : null;
+
+  // Bugete depășite luna aceasta
+  const budgetsResult = await db
+    .select({
+      amount: schema.budgets.amount,
+      categoryId: schema.budgets.categoryId,
+    })
+    .from(schema.budgets)
+    .where(eq(schema.budgets.userId, user.id));
+
+  let bugetDepasiteCount = 0;
+  if (budgetsResult.length > 0) {
+    const spendingResult = await db
+      .select({
+        categoryId: schema.transactions.categoryId,
+        total: sql<number>`COALESCE(SUM(ABS(amount)), 0)`,
+      })
+      .from(schema.transactions)
+      .where(and(
+        eq(schema.transactions.userId, user.id),
+        gte(schema.transactions.date, primaZiLuna),
+        lte(schema.transactions.date, ultimaZiStr),
+        sql`amount < 0`
+      ))
+      .groupBy(schema.transactions.categoryId);
+
+    const spendingMap = new Map(spendingResult.map((s) => [s.categoryId, Number(s.total)]));
+    bugetDepasiteCount = budgetsResult.filter((b) =>
+      (spendingMap.get(b.categoryId) ?? 0) > Number(b.amount)
+    ).length;
+  }
+
   // Bănci (pentru onboarding)
   const banksResult = await db
     .select({ id: schema.banks.id })
@@ -198,6 +234,94 @@ export default async function DashboardPage() {
             <p className="text-xs mt-2" style={{ color: "rgba(255,255,255,0.35)" }}>Plăți în {lunaNumeRo}</p>
           </div>
         </div>
+
+        {/* Rata de economisire + Bugete depășite */}
+        {totalTranzactii > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            {/* Rata de economisire */}
+            <div className="rounded-2xl p-6"
+              style={{
+                background: rataEconomisire === null
+                  ? "rgba(255,255,255,0.05)"
+                  : rataEconomisire >= 20
+                    ? "rgba(20,184,166,0.08)"
+                    : rataEconomisire >= 0
+                      ? "rgba(251,191,36,0.08)"
+                      : "rgba(239,68,68,0.08)",
+                border: rataEconomisire === null
+                  ? "1px solid rgba(255,255,255,0.08)"
+                  : rataEconomisire >= 20
+                    ? "1px solid rgba(20,184,166,0.2)"
+                    : rataEconomisire >= 0
+                      ? "1px solid rgba(251,191,36,0.2)"
+                      : "1px solid rgba(239,68,68,0.2)",
+              }}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-bold" style={{ color: "rgba(255,255,255,0.6)" }}>Rata de economisire</p>
+                <span className="text-xl">
+                  {rataEconomisire === null ? "📊" : rataEconomisire >= 20 ? "🌟" : rataEconomisire >= 0 ? "⚠️" : "🔴"}
+                </span>
+              </div>
+              {rataEconomisire === null ? (
+                <p className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>Adaugă venituri pentru a calcula</p>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold" style={{
+                    color: rataEconomisire >= 20 ? "#2dd4bf" : rataEconomisire >= 0 ? "#fbbf24" : "#f87171"
+                  }}>
+                    {rataEconomisire}%
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.35)" }}>
+                    {rataEconomisire >= 20
+                      ? "Excelent! Economisești bine."
+                      : rataEconomisire >= 0
+                        ? "Poți economisi mai mult."
+                        : "Cheltuieli mai mari decât veniturile!"}
+                  </p>
+                </>
+              )}
+            </div>
+
+            {/* Starea bugetelor */}
+            <Link href="/dashboard/budgets"
+              className="rounded-2xl p-6 transition-all hover:scale-[1.02]"
+              style={{
+                background: budgetsResult.length === 0
+                  ? "rgba(255,255,255,0.05)"
+                  : bugetDepasiteCount > 0
+                    ? "rgba(239,68,68,0.08)"
+                    : "rgba(34,197,94,0.08)",
+                border: budgetsResult.length === 0
+                  ? "1px solid rgba(255,255,255,0.08)"
+                  : bugetDepasiteCount > 0
+                    ? "1px solid rgba(239,68,68,0.2)"
+                    : "1px solid rgba(34,197,94,0.2)",
+                textDecoration: "none",
+              }}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-bold" style={{ color: "rgba(255,255,255,0.6)" }}>Bugete lunare</p>
+                <span className="text-xl">
+                  {budgetsResult.length === 0 ? "💰" : bugetDepasiteCount > 0 ? "⛔" : "✅"}
+                </span>
+              </div>
+              {budgetsResult.length === 0 ? (
+                <p className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>Nu ai bugete setate →</p>
+              ) : bugetDepasiteCount > 0 ? (
+                <>
+                  <p className="text-3xl font-bold" style={{ color: "#f87171" }}>{bugetDepasiteCount}</p>
+                  <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.35)" }}>
+                    {bugetDepasiteCount === 1 ? "categorie depășită" : "categorii depășite"} → Vezi bugete
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold" style={{ color: "#4ade80" }}>{budgetsResult.length}</p>
+                  <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.35)" }}>bugete în regulă → Vezi bugete</p>
+                </>
+              )}
+            </Link>
+          </div>
+        )}
 
         {/* Navigare rapidă */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">

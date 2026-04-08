@@ -12,11 +12,18 @@ interface Currency {
   symbol: string;
 }
 
+interface RatesData {
+  rates: Record<string, number>;
+  date: string | null;
+  base: string;
+}
+
 const PRESETS = [
   { code: "RON", name: "Leu românesc", symbol: "lei" },
   { code: "EUR", name: "Euro", symbol: "€" },
   { code: "USD", name: "Dolar american", symbol: "$" },
   { code: "GBP", name: "Liră sterlină", symbol: "£" },
+  { code: "CHF", name: "Franc elvețian", symbol: "CHF" },
 ];
 
 export default function CurrenciesPage() {
@@ -24,6 +31,9 @@ export default function CurrenciesPage() {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [loading, setLoading] = useState(true);
   const [addingPreset, setAddingPreset] = useState<string | null>(null);
+
+  const [ratesData, setRatesData] = useState<RatesData | null>(null);
+  const [ratesLoading, setRatesLoading] = useState(false);
 
   // Formular adăugare manuală
   const [showForm, setShowForm] = useState(false);
@@ -55,6 +65,24 @@ export default function CurrenciesPage() {
       setLoading(false);
     }
   };
+
+  const fetchRates = async () => {
+    setRatesLoading(true);
+    try {
+      const res = await fetch("/api/currencies/rates");
+      if (res.ok) {
+        const data = await res.json();
+        setRatesData(data);
+      }
+    } finally {
+      setRatesLoading(false);
+    }
+  };
+
+  // Reîncarcă ratele când se schimbă lista de valute
+  useEffect(() => {
+    if (currencies.length > 0) fetchRates();
+  }, [currencies.length]);
 
   const addCurrency = async (code: string, name: string, symbol: string) => {
     const res = await fetch("/api/currencies", {
@@ -104,6 +132,18 @@ export default function CurrenciesPage() {
   };
 
   const existingCodes = new Set(currencies.map((c) => c.code));
+
+  // Formatare rată vs RON (baza reală pentru utilizatorii români)
+  const getRonRate = (code: string): string | null => {
+    if (!ratesData?.rates) return null;
+    const ron = ratesData.rates["RON"];
+    const target = ratesData.rates[code];
+    if (!ron || !target) return null;
+    if (code === "RON") return "1 EUR = " + ron.toFixed(4) + " RON";
+    // Rata față de RON: cât RON costă 1 unitate din codul dat
+    const rateVsRon = ron / target;
+    return `1 ${code} = ${rateVsRon.toFixed(4)} RON`;
+  };
 
   return (
     <div className="min-h-screen relative overflow-hidden"
@@ -194,6 +234,86 @@ export default function CurrenciesPage() {
             })}
           </div>
         </div>
+
+        {/* Cursuri live */}
+        {currencies.length > 0 && (
+          <div className="rounded-2xl p-5 mb-6"
+            style={{
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-bold" style={{ color: "rgba(255,255,255,0.6)" }}>
+                Cursuri live (Banca Centrală Europeană)
+              </p>
+              <div className="flex items-center gap-3">
+                {ratesData?.date && (
+                  <span className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
+                    {ratesData.date}
+                  </span>
+                )}
+                <button onClick={fetchRates} disabled={ratesLoading}
+                  className="px-3 py-1 rounded-lg text-xs font-bold transition-all"
+                  style={{
+                    background: "rgba(20,184,166,0.15)",
+                    border: "1px solid rgba(20,184,166,0.3)",
+                    color: "#2dd4bf",
+                  }}>
+                  {ratesLoading ? "⏳" : "🔄 Actualizează"}
+                </button>
+              </div>
+            </div>
+
+            {ratesLoading ? (
+              <div className="text-center py-4 text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
+                Se încarcă cursurile...
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {currencies.map((c) => {
+                  const rateLabel = getRonRate(c.code);
+                  const rate = ratesData?.rates?.[c.code];
+                  return (
+                    <div key={c.id} className="rounded-xl p-4"
+                      style={{
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                      }}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-bold" style={{ color: "#2dd4bf" }}>
+                            {c.symbol} {c.code}
+                          </p>
+                          <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{c.name}</p>
+                        </div>
+                        <div className="text-right">
+                          {c.code === "EUR" ? (
+                            <p className="text-xs font-bold" style={{ color: "rgba(255,255,255,0.5)" }}>bază</p>
+                          ) : rate ? (
+                            <>
+                              <p className="text-sm font-bold" style={{ color: "#ffffff" }}>
+                                1 EUR = {rate.toFixed(4)} {c.code}
+                              </p>
+                              {rateLabel && (
+                                <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>
+                                  {rateLabel}
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
+                              {ratesData ? "nedisponibil" : "—"}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Tabel valute */}
         <div className="rounded-2xl overflow-hidden"

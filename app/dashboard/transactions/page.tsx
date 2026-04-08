@@ -73,6 +73,52 @@ export default function TransactionsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Selecție multiplă (bulk categorize)
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkCategoryId, setBulkCategoryId] = useState("");
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === transactions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(transactions.map((t) => t.id)));
+    }
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+    setBulkCategoryId("");
+  };
+
+  const handleBulkCategorize = async () => {
+    if (selectedIds.size === 0 || !bulkCategoryId) return;
+    setBulkLoading(true);
+    try {
+      await fetch("/api/transactions/bulk-categorize", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds), categoryId: bulkCategoryId }),
+      });
+      exitSelectMode();
+      await fetchTransactions();
+      setSuccessMessage(`${selectedIds.size} tranzacții categorizate!`);
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   // Re-categorizare bulk
   const [recategorizing, setRecategorizing] = useState(false);
 
@@ -323,6 +369,20 @@ export default function TransactionsPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+              className="px-4 py-2 rounded-xl text-sm font-bold"
+              style={selectMode ? {
+                background: "rgba(139,92,246,0.2)",
+                border: "1px solid rgba(139,92,246,0.4)",
+                color: "#a78bfa",
+              } : {
+                background: "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                color: "rgba(255,255,255,0.7)",
+              }}>
+              {selectMode ? `✕ Ieși (${selectedIds.size})` : "☑ Selectează"}
+            </button>
             <a
               href={`/api/transactions/export?${(() => {
                 const p = new URLSearchParams();
@@ -521,11 +581,19 @@ export default function TransactionsPage() {
           {/* Header tabel — doar desktop */}
           <div className="hidden md:grid items-center px-5 py-3 text-xs font-bold uppercase"
             style={{
-              gridTemplateColumns: "110px 1fr 130px 140px 120px 170px",
+              gridTemplateColumns: selectMode ? "32px 110px 1fr 130px 140px 120px 170px" : "110px 1fr 130px 140px 120px 170px",
               color: "rgba(255,255,255,0.4)",
               borderBottom: "1px solid rgba(255,255,255,0.08)",
               background: "rgba(255,255,255,0.03)",
             }}>
+            {selectMode && (
+              <input type="checkbox"
+                checked={selectedIds.size === transactions.length && transactions.length > 0}
+                onChange={toggleSelectAll}
+                className="cursor-pointer"
+                style={{ width: 16, height: 16, accentColor: "#a78bfa" }}
+              />
+            )}
             <span>Dată</span>
             <span>Descriere</span>
             <span>Bancă</span>
@@ -611,7 +679,15 @@ export default function TransactionsPage() {
 
                 {/* Desktop layout */}
                 <div className="hidden md:grid items-center px-5 py-4"
-                  style={{ gridTemplateColumns: "110px 1fr 130px 140px 120px 170px" }}>
+                  style={{ gridTemplateColumns: selectMode ? "32px 110px 1fr 130px 140px 120px 170px" : "110px 1fr 130px 140px 120px 170px" }}>
+                  {selectMode && (
+                    <input type="checkbox"
+                      checked={selectedIds.has(t.id)}
+                      onChange={() => toggleSelect(t.id)}
+                      className="cursor-pointer"
+                      style={{ width: 16, height: 16, accentColor: "#a78bfa" }}
+                    />
+                  )}
                 {/* Dată */}
                 <span className="text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>
                   {formatDate(t.date)}
@@ -721,6 +797,55 @@ export default function TransactionsPage() {
           </div>
         )}
       </main>
+
+      {/* Bara bulk categorize */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 px-4 pb-4 pt-3"
+          style={{
+            background: "rgba(15,23,42,0.97)",
+            backdropFilter: "blur(20px)",
+            borderTop: "1px solid rgba(139,92,246,0.3)",
+            boxShadow: "0 -8px 32px rgba(0,0,0,0.5)",
+          }}>
+          <div className="container mx-auto flex items-center gap-3 flex-wrap">
+            <span className="text-sm font-bold" style={{ color: "#a78bfa" }}>
+              {selectedIds.size} selectate
+            </span>
+            <select
+              value={bulkCategoryId}
+              onChange={(e) => setBulkCategoryId(e.target.value)}
+              className="flex-1 rounded-xl px-4 py-2.5 text-sm outline-none"
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(139,92,246,0.4)",
+                color: bulkCategoryId ? "#ffffff" : "rgba(255,255,255,0.4)",
+                minWidth: 180,
+              }}>
+              <option value="" style={{ background: "#1e293b" }}>Alege categorie...</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id} style={{ background: "#1e293b", color: "#ffffff" }}>
+                  {c.icon} {c.name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleBulkCategorize}
+              disabled={!bulkCategoryId || bulkLoading}
+              className="px-5 py-2.5 rounded-xl text-sm font-bold"
+              style={{
+                background: bulkCategoryId && !bulkLoading ? "linear-gradient(135deg, #14b8a6, #f97316)" : "rgba(255,255,255,0.08)",
+                color: bulkCategoryId && !bulkLoading ? "#ffffff" : "rgba(255,255,255,0.3)",
+              }}>
+              {bulkLoading ? "Se aplică..." : "✓ Aplică"}
+            </button>
+            <button onClick={exitSelectMode}
+              className="px-4 py-2.5 rounded-xl text-sm font-bold"
+              style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)" }}>
+              Anulează
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal adăugare */}
       {showModal && (

@@ -121,10 +121,14 @@ async function sendBudgetEmail(
 </body>
 </html>`;
 
+  const apiKey = (process.env.RESEND_API_KEY || "").trim();
+  if (!apiKey) throw new Error("RESEND_API_KEY not configured");
+  console.log("[RESEND] Using key prefix:", apiKey.slice(0, 10) + "...");
+
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+      "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -215,7 +219,8 @@ export async function POST(request: NextRequest) {
 
     // Resend free tier permite trimitere doar către emailul înregistrat pe resend.com
     // NOTIFY_EMAIL = emailul cu care ești înregistrată pe resend.com
-    const toEmail = process.env.NOTIFY_EMAIL || authUser.email!;
+    const toEmail = (process.env.NOTIFY_EMAIL || authUser.email || "").trim();
+    console.log("[BUDGETS_NOTIFY] Sending to:", toEmail, "| exceeded:", exceeded.length, "| nearLimit:", nearLimit.length);
     await sendBudgetEmail(toEmail, user.name, exceeded, nearLimit, monthLabel);
 
     return NextResponse.json({
@@ -225,7 +230,8 @@ export async function POST(request: NextRequest) {
       nearLimit: nearLimit.length,
     });
   } catch (error) {
-    console.error("[BUDGETS_NOTIFY] Error:", error);
-    return NextResponse.json({ error: "Eroare internă server" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[BUDGETS_NOTIFY] Error:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
