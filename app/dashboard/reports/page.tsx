@@ -111,6 +111,24 @@ export default function ReportsPage() {
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachError, setCoachError] = useState<string | null>(null);
 
+  interface BudgetRow {
+    categoryId: string;
+    categoryName: string | null;
+    categoryIcon: string | null;
+    categoryColor: string | null;
+    amount: number;
+    spent: number;
+    percentage: number;
+  }
+  const [budgets, setBudgets] = useState<BudgetRow[]>([]);
+
+  useEffect(() => {
+    fetch("/api/budgets")
+      .then((r) => r.json())
+      .then((d) => setBudgets(d.budgets || []))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -285,6 +303,62 @@ export default function ReportsPage() {
                 );
               })()}
             </div>
+
+            {/* Depășiri buget — doar dacă există bugete setate */}
+            {budgets.length > 0 && (() => {
+              const exceeded = budgets.filter((b) => b.spent > b.amount);
+              const nearLimit = budgets.filter((b) => b.spent / b.amount >= 0.8 && b.spent <= b.amount);
+              if (exceeded.length === 0 && nearLimit.length === 0) return null;
+              return (
+                <div className="rounded-2xl p-5 mb-6"
+                  style={{ background: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.2)" }}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-lg">⚠️</span>
+                    <div>
+                      <p className="font-bold" style={{ color: "#ffffff" }}>Alerte bugete — luna curentă</p>
+                      <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                        Categorii unde ai depășit sau ești aproape de limită
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    {[...exceeded, ...nearLimit].map((b) => {
+                      const pct = Math.round((b.spent / b.amount) * 100);
+                      const over = b.spent > b.amount;
+                      return (
+                        <div key={b.categoryId} className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0"
+                            style={{ background: (b.categoryColor || "#6366f1") + "22" }}>
+                            {b.categoryIcon || "📁"}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-bold" style={{ color: "#ffffff" }}>{b.categoryName}</span>
+                              <span className="text-xs font-bold" style={{ color: over ? "#f87171" : "#fbbf24" }}>
+                                {over ? `⛔ depășit cu ${new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(b.spent - b.amount)} RON` : `⚠ ${pct}% din limită`}
+                              </span>
+                            </div>
+                            <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+                              <div className="h-2 rounded-full"
+                                style={{
+                                  width: `${Math.min(pct, 100)}%`,
+                                  background: over
+                                    ? "linear-gradient(90deg, #ef4444, #f87171)"
+                                    : "linear-gradient(90deg, #f59e0b, #fbbf24)",
+                                }} />
+                            </div>
+                            <div className="flex justify-between mt-0.5 text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
+                              <span>Cheltuit: {new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(b.spent)} RON</span>
+                              <span>Limită: {new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(b.amount)} RON</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Top Spending Categories */}
             <div className="rounded-2xl p-5 mb-6" style={cardStyle}>
