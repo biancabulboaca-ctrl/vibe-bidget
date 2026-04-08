@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Logo from "@/components/logo";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -67,7 +68,7 @@ export default function RegisterPage() {
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <span className="text-5xl">💰</span>
+          <div className="flex justify-center"><Logo size={56} /></div>
           <h1 className="text-2xl font-bold mt-3" style={{ color: "#ffffff" }}>Vibe Budget</h1>
           <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.55)" }}>
             Creează-ți contul gratuit

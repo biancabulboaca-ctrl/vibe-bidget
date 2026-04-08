@@ -4,6 +4,7 @@ import { db, schema } from "@/lib/db";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
 import LogoutButton from "./logout-button";
 import Link from "next/link";
+import Logo from "@/components/logo";
 
 function formatAmount(amount: number, currency: string): string {
   return new Intl.NumberFormat("ro-RO", {
@@ -90,11 +91,11 @@ export default async function DashboardPage() {
         }}>
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">💰</span>
+            <Logo size={32} />
             <span className="text-lg font-bold" style={{ color: "#ffffff" }}>Vibe Budget</span>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm" style={{ color: "rgba(255,255,255,0.6)" }}>
+          <div className="flex items-center gap-2 md:gap-4">
+            <span className="hidden md:inline text-sm" style={{ color: "rgba(255,255,255,0.6)" }}>
               Bună, <span className="font-bold" style={{ color: "#2dd4bf" }}>{user.name}</span>!
             </span>
             <LogoutButton />
