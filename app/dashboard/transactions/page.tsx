@@ -322,15 +322,39 @@ export default function TransactionsPage() {
               <span className="text-lg font-bold" style={{ color: "#ffffff" }}>Tranzacții</span>
             </div>
           </div>
-          <button onClick={() => setShowModal(true)}
-            className="px-4 py-2 rounded-xl text-sm font-bold"
-            style={{
-              background: "linear-gradient(135deg, #14b8a6, #f97316)",
-              color: "#ffffff",
-              boxShadow: "0 4px 15px rgba(20,184,166,0.3)",
-            }}>
-            + Adaugă tranzacție
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href={`/api/transactions/export?${(() => {
+                const p = new URLSearchParams();
+                if (searchDebounced) p.set("search", searchDebounced);
+                if (bankId) p.set("bankId", bankId);
+                if (recurringFilter) p.set("recurring", "true");
+                else if (uncategorized) p.set("uncategorized", "true");
+                else if (categoryId) p.set("categoryId", categoryId);
+                if (dateFrom) p.set("dateFrom", dateFrom);
+                if (dateTo) p.set("dateTo", dateTo);
+                return p.toString();
+              })()}`}
+              download
+              className="px-4 py-2 rounded-xl text-sm font-bold"
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                color: "rgba(255,255,255,0.7)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                textDecoration: "none",
+              }}>
+              ⬇ Export CSV
+            </a>
+            <button onClick={() => setShowModal(true)}
+              className="px-4 py-2 rounded-xl text-sm font-bold"
+              style={{
+                background: "linear-gradient(135deg, #14b8a6, #f97316)",
+                color: "#ffffff",
+                boxShadow: "0 4px 15px rgba(20,184,166,0.3)",
+              }}>
+              + Adaugă tranzacție
+            </button>
+          </div>
         </div>
       </header>
       <DashboardNav />
