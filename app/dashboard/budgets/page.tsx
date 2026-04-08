@@ -157,6 +157,22 @@ export default function BudgetsPage() {
   const totalSpent = budgetedRows.reduce((s, r) => s + r.spent, 0);
   const overCount = budgetedRows.filter((r) => r.spent > r.amount).length;
 
+  const [notifying, setNotifying] = useState(false);
+  const [notifyMsg, setNotifyMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const handleNotify = async () => {
+    setNotifying(true);
+    setNotifyMsg(null);
+    try {
+      const res = await fetch("/api/budgets/notify", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { setNotifyMsg({ ok: false, text: data.error || "Eroare la trimitere." }); return; }
+      if (data.message) { setNotifyMsg({ ok: true, text: data.message }); return; }
+      setNotifyMsg({ ok: true, text: `Email trimis! ${data.exceeded} depășite, ${data.nearLimit} aproape de limită.` });
+    } catch { setNotifyMsg({ ok: false, text: "Eroare de rețea." }); }
+    finally { setNotifying(false); setTimeout(() => setNotifyMsg(null), 6000); }
+  };
+
   return (
     <div className="min-h-screen relative overflow-hidden"
       style={{ background: "linear-gradient(135deg, #0f172a 0%, #1a1f2e 50%, #0f172a 100%)" }}>
@@ -175,6 +191,18 @@ export default function BudgetsPage() {
             <span className="text-lg font-bold" style={{ color: "#ffffff" }}>Bugete lunare</span>
           </div>
           <span className="text-sm" style={{ color: "rgba(255,255,255,0.35)" }}>— {monthName}</span>
+          {budgetedRows.length > 0 && (
+            <button onClick={handleNotify} disabled={notifying}
+              className="ml-auto px-4 py-2 rounded-xl text-sm font-bold"
+              style={{
+                background: notifying ? "rgba(20,184,166,0.1)" : "rgba(20,184,166,0.15)",
+                border: "1px solid rgba(20,184,166,0.3)",
+                color: notifying ? "rgba(45,212,191,0.5)" : "#2dd4bf",
+                cursor: notifying ? "not-allowed" : "pointer",
+              }}>
+              {notifying ? "Se trimite..." : "📧 Trimite alertă email"}
+            </button>
+          )}
         </div>
       </header>
       <DashboardNav />
@@ -221,6 +249,18 @@ export default function BudgetsPage() {
               <p className="text-xs font-bold uppercase mb-1" style={{ color: overCount > 0 ? "rgba(248,113,113,0.7)" : "rgba(74,222,128,0.7)", letterSpacing: "0.08em" }}>Depășite</p>
               <p className="text-xl font-bold" style={{ color: overCount > 0 ? "#f87171" : "#4ade80" }}>{overCount} <span className="text-sm font-normal" style={{ color: "rgba(255,255,255,0.3)" }}>categorii</span></p>
             </div>
+          </div>
+        )}
+
+        {notifyMsg && (
+          <div className="rounded-xl px-4 py-3 mb-4 flex items-center gap-2 text-sm font-bold"
+            style={notifyMsg.ok ? {
+              background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.35)", color: "#4ade80",
+            } : {
+              background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5",
+            }}>
+            <span>{notifyMsg.ok ? "✅" : "⚠"}</span>
+            <span>{notifyMsg.text}</span>
           </div>
         )}
 
