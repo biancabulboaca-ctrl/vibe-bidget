@@ -213,6 +213,37 @@ export const userKeywords = pgTable("user_keywords", {
 });
 
 /**
+ * TABELA 7: GOALS (Obiective de economisire)
+ *
+ * CE STOCĂM:
+ * - id: Identificator unic
+ * - userId: La cine aparține goal-ul
+ * - name: Numele obiectivului (ex: "Vacanță Grecia", "Fond de urgență")
+ * - targetAmount: Suma țintă (ex: 5000 RON)
+ * - currentAmount: Suma economisită până acum (actualizată manual)
+ * - deadline: Data limită (opțional)
+ * - icon: Emoji pentru identificare vizuală
+ * - color: Culoare pentru progress bar
+ * - createdAt: Când a fost creat
+ */
+export const goals = pgTable("goals", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => createId()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  targetAmount: decimal("target_amount", { precision: 10, scale: 2, mode: 'number' }).notNull(),
+  currentAmount: decimal("current_amount", { precision: 10, scale: 2, mode: 'number' }).notNull().default(0),
+  deadline: date("deadline", { mode: 'string' }), // opțional, YYYY-MM-DD
+  icon: text("icon").notNull().default("🎯"),
+  color: text("color").notNull().default("#14b8a6"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
  * TIPURI TYPESCRIPT
  *
  * Acestea ne ajută să folosim datele în cod cu autocompletare.
@@ -235,3 +266,6 @@ export type NewTransaction = typeof transactions.$inferInsert;
 
 export type UserKeyword = typeof userKeywords.$inferSelect;
 export type NewUserKeyword = typeof userKeywords.$inferInsert;
+
+export type Goal = typeof goals.$inferSelect;
+export type NewGoal = typeof goals.$inferInsert;

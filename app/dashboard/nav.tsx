@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/currencies", label: "Valute", icon: "💱" },
   { href: "/dashboard/upload", label: "Import", icon: "📤" },
   { href: "/dashboard/reports", label: "Rapoarte", icon: "📊" },
+  { href: "/dashboard/goals", label: "Obiective", icon: "🎯" },
 ];
 
 export default function DashboardNav() {
@@ -21,7 +22,7 @@ export default function DashboardNav() {
       style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
       <div className="container mx-auto px-4">
         <div className="flex items-center gap-1 overflow-x-auto"
-          style={{ scrollbarWidth: "none" }}>
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
           {NAV_ITEMS.map((item) => {
             const active = item.exact
               ? pathname === item.href
