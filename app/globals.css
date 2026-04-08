@@ -24,3 +24,76 @@
 body {
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@media print {
+  /* Ascunde elementele de navigare și butoane */
+  header, nav, .no-print {
+    display: none !important;
+  }
+
+  /* Fundal alb, text negru pentru print */
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Elimină blur-urile și gradientele */
+  * {
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    color: #000000 !important;
+    border-color: #cccccc !important;
+  }
+
+  /* Carduri cu border vizibil */
+  .rounded-2xl, .rounded-xl {
+    border: 1px solid #cccccc !important;
+    break-inside: avoid;
+  }
+
+  /* Text colorat vizibil la print */
+  [style*="color: #f87171"], [style*="color: rgb(248"] {
+    color: #cc0000 !important;
+  }
+  [style*="color: #2dd4bf"], [style*="color: #4ade80"] {
+    color: #006600 !important;
+  }
+  [style*="color: #fbbf24"] {
+    color: #996600 !important;
+  }
+
+  /* Progress bar-uri vizibile */
+  .h-3, .h-2, .h-1\.5 {
+    background: #eeeeee !important;
+    border: 1px solid #cccccc !important;
+  }
+
+  /* Elimină fixed/sticky positioning */
+  .fixed, .sticky {
+    position: static !important;
+  }
+
+  /* Elimină blob-urile decorative */
+  .blur-3xl {
+    display: none !important;
+  }
+
+  /* Titlu pagină */
+  main::before {
+    content: "Vibe Budget — Raport financiar";
+    display: block;
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 16px;
+    color: #000000 !important;
+    border-bottom: 2px solid #000000;
+    padding-bottom: 8px;
+  }
+
+  /* Evită page break în carduri */
+  .grid > div {
+    break-inside: avoid;
+  }
+}

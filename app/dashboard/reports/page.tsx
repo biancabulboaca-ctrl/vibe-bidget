@@ -197,6 +197,10 @@ export default function ReportsPage() {
     border: "1px solid rgba(255,255,255,0.08)",
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
     <div className="min-h-screen relative overflow-hidden"
       style={{ background: "linear-gradient(135deg, #0f172a 0%, #1a1f2e 50%, #0f172a 100%)" }}>
@@ -246,6 +250,18 @@ export default function ReportsPage() {
             ))}
           </div>
 
+          <div className="flex items-center gap-2">
+          {data && data.summary.transactionCount > 0 && (
+            <button onClick={handlePrint}
+              className="px-4 py-2 rounded-xl text-sm font-bold no-print"
+              style={{
+                background: "rgba(255,255,255,0.08)",
+                color: "rgba(255,255,255,0.7)",
+                border: "1px solid rgba(255,255,255,0.15)",
+              }}>
+              🖨️ Printează / PDF
+            </button>
+          )}
           {data && data.summary.transactionCount > 0 && (
             <button onClick={handleAnalyze} disabled={coachLoading}
               className="px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2"
@@ -259,6 +275,7 @@ export default function ReportsPage() {
                 : <><span>🤖</span><span>Analizează cheltuielile</span></>}
             </button>
           )}
+          </div>
         </div>
 
         {loading ? (

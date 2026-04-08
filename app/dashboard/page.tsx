@@ -5,6 +5,7 @@ import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import LogoutButton from "./logout-button";
 import Link from "next/link";
 import Logo from "@/components/logo";
+import Onboarding from "./onboarding";
 
 function formatAmount(amount: number, currency: string): string {
   return new Intl.NumberFormat("ro-RO", {
@@ -72,6 +73,14 @@ export default async function DashboardPage() {
     .where(eq(schema.transactions.userId, user.id));
   const totalTranzactii = Number(totalTranzactiiResult[0]?.count ?? 0);
 
+  // Bănci (pentru onboarding)
+  const banksResult = await db
+    .select({ id: schema.banks.id })
+    .from(schema.banks)
+    .where(eq(schema.banks.userId, user.id))
+    .limit(1);
+  const hasBanks = banksResult.length > 0;
+
   // Ultimele 5 tranzacții
   const ultimeleTranzactii = await db
     .select({
@@ -93,6 +102,12 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen relative overflow-hidden"
       style={{ background: "linear-gradient(135deg, #0f172a 0%, #1a1f2e 50%, #0f172a 100%)" }}>
+
+      <Onboarding
+        hasBanks={hasBanks}
+        hasTransactions={totalTranzactii > 0}
+        userName={user.name}
+      />
 
       {/* Blobs fundal */}
       <div className="fixed top-[-15%] left-[-10%] w-96 h-96 rounded-full blur-3xl opacity-20 pointer-events-none"
