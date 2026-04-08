@@ -181,7 +181,29 @@ export default function BudgetsPage() {
 
       <main className="container mx-auto px-4 py-6 relative z-10 max-w-3xl">
 
-        {/* Sumar */}
+        {/* Total general — mereu vizibil */}
+        <div className="rounded-2xl p-5 mb-4 flex items-center justify-between"
+          style={{ background: "rgba(20,184,166,0.08)", border: "1px solid rgba(20,184,166,0.2)" }}>
+          <div>
+            <p className="text-xs font-bold uppercase mb-1" style={{ color: "rgba(20,184,166,0.7)", letterSpacing: "0.08em" }}>Total bugete lunare</p>
+            <p className="text-3xl font-bold" style={{ color: "#2dd4bf" }}>
+              {formatAmount(totalBudget)} <span className="text-lg font-normal" style={{ color: "rgba(45,212,191,0.6)" }}>RON</span>
+            </p>
+          </div>
+          {totalBudget > 0 && (
+            <div className="text-right">
+              <p className="text-xs mb-1" style={{ color: "rgba(255,255,255,0.4)" }}>Cheltuit până acum</p>
+              <p className="text-xl font-bold" style={{ color: totalSpent > totalBudget ? "#f87171" : "#ffffff" }}>
+                {formatAmount(totalSpent)} <span className="text-sm font-normal" style={{ color: "rgba(255,255,255,0.4)" }}>RON</span>
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                {Math.round((totalSpent / totalBudget) * 100)}% din total
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Sumar pe categorii */}
         {budgetedRows.length > 0 && (
           <div className="grid grid-cols-3 gap-3 mb-6">
             <div className="rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
