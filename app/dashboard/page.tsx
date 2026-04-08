@@ -213,14 +213,14 @@ export default async function DashboardPage() {
             <span className="text-2xl">💱</span>
             <span className="text-sm font-bold" style={{ color: "#facc15" }}>Valute</span>
           </Link>
-          <Link href="/dashboard/upload"
+          <Link href="/dashboard/reports"
             className="rounded-2xl p-4 flex items-center gap-3 transition-all hover:scale-105"
             style={{
               background: "rgba(20,184,166,0.07)",
               border: "1px solid rgba(20,184,166,0.15)",
             }}>
-            <span className="text-2xl">📤</span>
-            <span className="text-sm font-bold" style={{ color: "#5eead4" }}>Import</span>
+            <span className="text-2xl">📊</span>
+            <span className="text-sm font-bold" style={{ color: "#5eead4" }}>Rapoarte</span>
           </Link>
         </div>
 
