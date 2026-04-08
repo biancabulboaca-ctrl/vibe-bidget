@@ -43,6 +43,7 @@ interface CoachData {
   healthExplanation: string;
   tips: string[];
   positiveObservation: string;
+  budgetAdvice?: string[];
 }
 
 const PERIODS: { value: Period; label: string }[] = [
@@ -169,6 +170,16 @@ export default function ReportsPage() {
             expenses: m.expenses,
             income: m.income,
           })),
+          budgetOverruns: budgets
+            .filter((b) => b.spent > b.amount)
+            .map((b) => ({
+              categoryName: b.categoryName || "Necunoscută",
+              categoryIcon: b.categoryIcon || "📁",
+              amount: b.amount,
+              spent: b.spent,
+              overBy: b.spent - b.amount,
+              percentage: Math.round((b.spent / b.amount) * 100),
+            })),
         }),
       });
       const json = await res.json();
@@ -309,47 +320,75 @@ export default function ReportsPage() {
               const exceeded = budgets.filter((b) => b.spent > b.amount);
               const nearLimit = budgets.filter((b) => b.spent / b.amount >= 0.8 && b.spent <= b.amount);
               if (exceeded.length === 0 && nearLimit.length === 0) return null;
+              const totalOverrun = exceeded.reduce((s, b) => s + (b.spent - b.amount), 0);
+              const alertList = [...exceeded, ...nearLimit];
+              const maxVal = Math.max(...alertList.map((b) => b.spent));
               return (
                 <div className="rounded-2xl p-5 mb-6"
                   style={{ background: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.2)" }}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="text-lg">⚠️</span>
-                    <div>
-                      <p className="font-bold" style={{ color: "#ffffff" }}>Alerte bugete — luna curentă</p>
-                      <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
-                        Categorii unde ai depășit sau ești aproape de limită
-                      </p>
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">⚠️</span>
+                      <div>
+                        <p className="font-bold" style={{ color: "#ffffff" }}>Alerte bugete — luna curentă</p>
+                        <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                          Categorii unde ai depășit sau ești aproape de limită
+                        </p>
+                      </div>
                     </div>
+                    {exceeded.length > 0 && (
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-bold uppercase" style={{ color: "rgba(248,113,113,0.6)", letterSpacing: "0.06em" }}>Total depășit</p>
+                        <p className="text-xl font-bold" style={{ color: "#f87171" }}>
+                          {new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(totalOverrun)} RON
+                        </p>
+                        <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>{exceeded.length} {exceeded.length === 1 ? "categorie" : "categorii"}</p>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex flex-col gap-3">
-                    {[...exceeded, ...nearLimit].map((b) => {
+
+                  {/* Grafic depășiri — bar chart manual */}
+                  <div className="flex flex-col gap-4">
+                    {alertList.map((b) => {
                       const pct = Math.round((b.spent / b.amount) * 100);
                       const over = b.spent > b.amount;
+                      const barWidthBudget = (b.amount / maxVal) * 100;
+                      const barWidthSpent = (b.spent / maxVal) * 100;
                       return (
-                        <div key={b.categoryId} className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0"
-                            style={{ background: (b.categoryColor || "#6366f1") + "22" }}>
-                            {b.categoryIcon || "📁"}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1">
+                        <div key={b.categoryId}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">{b.categoryIcon || "📁"}</span>
                               <span className="text-sm font-bold" style={{ color: "#ffffff" }}>{b.categoryName}</span>
-                              <span className="text-xs font-bold" style={{ color: over ? "#f87171" : "#fbbf24" }}>
-                                {over ? `⛔ depășit cu ${new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(b.spent - b.amount)} RON` : `⚠ ${pct}% din limită`}
+                            </div>
+                            <span className="text-xs font-bold" style={{ color: over ? "#f87171" : "#fbbf24" }}>
+                              {over
+                                ? `⛔ +${new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(b.spent - b.amount)} RON depășit`
+                                : `⚠ ${pct}% din limită`}
+                            </span>
+                          </div>
+                          {/* Buget (linie de referință) */}
+                          <div className="relative h-6 rounded-lg overflow-hidden mb-1"
+                            style={{ background: "rgba(255,255,255,0.05)" }}>
+                            {/* Bar buget */}
+                            <div className="absolute top-0 left-0 h-full rounded-lg opacity-30"
+                              style={{ width: `${barWidthBudget}%`, background: "#6b7280" }} />
+                            {/* Bar cheltuit */}
+                            <div className="absolute top-0 left-0 h-full rounded-lg transition-all duration-500"
+                              style={{
+                                width: `${barWidthSpent}%`,
+                                background: over
+                                  ? "linear-gradient(90deg, #ef4444cc, #f87171cc)"
+                                  : "linear-gradient(90deg, #f59e0bcc, #fbbf24cc)",
+                              }} />
+                            {/* Label */}
+                            <div className="absolute inset-0 flex items-center justify-between px-2">
+                              <span className="text-xs font-bold" style={{ color: "#ffffff", fontSize: "10px" }}>
+                                Cheltuit: {new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(b.spent)} RON
                               </span>
-                            </div>
-                            <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
-                              <div className="h-2 rounded-full"
-                                style={{
-                                  width: `${Math.min(pct, 100)}%`,
-                                  background: over
-                                    ? "linear-gradient(90deg, #ef4444, #f87171)"
-                                    : "linear-gradient(90deg, #f59e0b, #fbbf24)",
-                                }} />
-                            </div>
-                            <div className="flex justify-between mt-0.5 text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>
-                              <span>Cheltuit: {new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(b.spent)} RON</span>
-                              <span>Limită: {new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(b.amount)} RON</span>
+                              <span className="text-xs" style={{ color: "rgba(255,255,255,0.5)", fontSize: "10px" }}>
+                                Limită: {new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(b.amount)} RON
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -530,6 +569,24 @@ export default function ReportsPage() {
                     <p className="text-sm" style={{ color: "rgba(255,255,255,0.75)" }}>{coachData.positiveObservation}</p>
                   </div>
                 </div>
+
+                {/* Strategii depășiri buget */}
+                {coachData.budgetAdvice && coachData.budgetAdvice.length > 0 && (
+                  <div className="mb-5">
+                    <p className="text-xs font-bold uppercase mb-3"
+                      style={{ color: "rgba(248,113,113,0.7)", letterSpacing: "0.08em" }}>⛔ Strategii pentru depășiri de buget</p>
+                    <div className="flex flex-col gap-3">
+                      {coachData.budgetAdvice.map((advice, i) => (
+                        <div key={i} className="flex gap-3 rounded-xl p-3"
+                          style={{ background: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.15)" }}>
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+                            style={{ background: "rgba(239,68,68,0.25)", color: "#f87171" }}>{i + 1}</span>
+                          <p className="text-sm" style={{ color: "rgba(255,255,255,0.75)" }}>{advice}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Sfaturi */}
                 <p className="text-xs font-bold uppercase mb-3"

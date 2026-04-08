@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { db, schema } from "@/lib/db";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import LogoutButton from "./logout-button";
 import Link from "next/link";
 import Logo from "@/components/logo";
@@ -71,6 +71,24 @@ export default async function DashboardPage() {
     .from(schema.transactions)
     .where(eq(schema.transactions.userId, user.id));
   const totalTranzactii = Number(totalTranzactiiResult[0]?.count ?? 0);
+
+  // Ultimele 5 tranzacții
+  const ultimeleTranzactii = await db
+    .select({
+      id: schema.transactions.id,
+      date: schema.transactions.date,
+      description: schema.transactions.description,
+      amount: schema.transactions.amount,
+      currency: schema.transactions.currency,
+      categoryName: schema.categories.name,
+      categoryIcon: schema.categories.icon,
+      categoryColor: schema.categories.color,
+    })
+    .from(schema.transactions)
+    .leftJoin(schema.categories, eq(schema.transactions.categoryId, schema.categories.id))
+    .where(eq(schema.transactions.userId, user.id))
+    .orderBy(desc(schema.transactions.date))
+    .limit(5);
 
   return (
     <div className="min-h-screen relative overflow-hidden"
@@ -242,32 +260,61 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        {/* Secțiune tranzacții */}
-        <div className="rounded-2xl p-8 text-center"
+        {/* Activitate recentă */}
+        <div className="rounded-2xl overflow-hidden"
           style={{
             background: "rgba(255,255,255,0.05)",
             backdropFilter: "blur(16px)",
             border: "1px solid rgba(255,255,255,0.08)",
           }}>
           {totalTranzactii === 0 ? (
-            <>
+            <div className="p-8 text-center">
               <span className="text-5xl">📊</span>
               <p className="font-bold mt-4" style={{ color: "#ffffff" }}>Nu ai tranzacții încă</p>
               <p className="text-sm mt-2" style={{ color: "rgba(255,255,255,0.45)" }}>
                 Importă un extras bancar pentru a vedea statisticile financiare.
               </p>
-            </>
+            </div>
           ) : (
             <>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold" style={{ color: "#ffffff" }}>Activitate recentă</h2>
-                <span className="text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>
-                  {totalTranzactii} tranzacții totale
-                </span>
+              <div className="flex items-center justify-between px-5 py-4"
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <h2 className="text-sm font-bold" style={{ color: "#ffffff" }}>Activitate recentă</h2>
+                <Link href="/dashboard/transactions"
+                  className="text-xs font-bold"
+                  style={{ color: "#2dd4bf" }}>
+                  Vezi toate ({totalTranzactii}) →
+                </Link>
               </div>
-              <p className="text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>
-                Lista tranzacțiilor va fi disponibilă în pagina Tranzacții.
-              </p>
+              {ultimeleTranzactii.map((t, i) => (
+                <div key={t.id}
+                  className="flex items-center gap-3 px-5 py-3"
+                  style={{ borderBottom: i < ultimeleTranzactii.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
+                  {/* Icon categorie */}
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0"
+                    style={{
+                      background: (t.categoryColor || "#6366f1") + "22",
+                      border: `1px solid ${(t.categoryColor || "#6366f1")}33`,
+                    }}>
+                    {t.categoryIcon || "💳"}
+                  </div>
+                  {/* Descriere + dată */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold truncate" style={{ color: "#ffffff" }}>{t.description}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                      {new Date(t.date).toLocaleDateString("ro-RO", { day: "2-digit", month: "short" })}
+                      {t.categoryName && (
+                        <span style={{ color: t.categoryColor || "#6366f1" }}> · {t.categoryName}</span>
+                      )}
+                    </p>
+                  </div>
+                  {/* Sumă */}
+                  <span className="text-sm font-bold shrink-0"
+                    style={{ color: Number(t.amount) >= 0 ? "#2dd4bf" : "#f87171" }}>
+                    {Number(t.amount) >= 0 ? "+" : "-"}{formatAmount(Math.abs(Number(t.amount)), t.currency)}
+                  </span>
+                </div>
+              ))}
             </>
           )}
         </div>

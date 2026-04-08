@@ -15,6 +15,15 @@ interface MonthSummary {
   income: number;
 }
 
+interface BudgetOverrun {
+  categoryName: string;
+  categoryIcon: string;
+  amount: number;
+  spent: number;
+  overBy: number;
+  percentage: number;
+}
+
 interface CoachRequest {
   period: string;
   summary: {
@@ -25,6 +34,7 @@ interface CoachRequest {
   };
   byCategory: CategorySummary[];
   byMonth: MonthSummary[];
+  budgetOverruns?: BudgetOverrun[];
 }
 
 interface CoachResponse {
@@ -32,6 +42,7 @@ interface CoachResponse {
   healthExplanation: string;
   tips: string[];
   positiveObservation: string;
+  budgetAdvice?: string[];
 }
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -50,11 +61,10 @@ export async function POST(request: NextRequest) {
     if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body: CoachRequest = await request.json();
-    const { period, summary, byCategory, byMonth } = body;
+    const { period, summary, byCategory, byMonth, budgetOverruns = [] } = body;
 
     const periodLabel = PERIOD_LABELS[period] ?? period;
 
-    // Construim rezumatul financiar pentru Claude — FĂRĂ date individuale
     const categoryLines = byCategory
       .map((c) => `  - ${c.categoryIcon} ${c.categoryName}: ${c.total.toFixed(2)} RON (${c.percentage}%)`)
       .join("\n");
@@ -66,6 +76,18 @@ export async function POST(request: NextRequest) {
     const savingsRate = summary.totalIncome > 0
       ? ((summary.balance / summary.totalIncome) * 100).toFixed(1)
       : "0";
+
+    const totalOverrun = budgetOverruns.reduce((s, b) => s + b.overBy, 0);
+
+    const budgetSection = budgetOverruns.length > 0
+      ? `\nBUGETE DEPĂȘITE (luna curentă):
+${budgetOverruns.map((b) => `  - ${b.categoryIcon} ${b.categoryName}: buget ${b.amount.toFixed(0)} RON, cheltuit ${b.spent.toFixed(0)} RON, depășit cu ${b.overBy.toFixed(0)} RON (${b.percentage}%)`).join("\n")}
+Total depășit: ${totalOverrun.toFixed(0)} RON`
+      : "\nBUGETE: Nicio depășire de buget în luna curentă.";
+
+    const budgetAdviceInstruction = budgetOverruns.length > 0
+      ? `\n- "budgetAdvice": array cu ${Math.min(budgetOverruns.length + 1, 3)} strategii concrete pentru a nu mai depăși bugetele menționate (menționează categoriile și sumele specifice)`
+      : `\n- "budgetAdvice": array gol []`;
 
     const prompt = `Ești un coach financiar personal pentru un utilizator din România. Analizează datele financiare agregate de mai jos și oferă feedback constructiv în limba română.
 
@@ -81,6 +103,7 @@ ${categoryLines || "  - Fără cheltuieli categorisite"}
 
 TREND LUNAR:
 ${monthLines || "  - Date insuficiente pentru trend"}
+${budgetSection}
 
 Răspunde EXCLUSIV cu un JSON valid (fără markdown, fără text în afara JSON-ului) cu această structură exactă:
 {
@@ -91,14 +114,15 @@ Răspunde EXCLUSIV cu un JSON valid (fără markdown, fără text în afara JSON
     "<sfat 2 specific și acționabil bazat pe date>",
     "<sfat 3 specific și acționabil bazat pe date>"
   ],
-  "positiveObservation": "<un lucru concret pe care utilizatorul îl face bine, bazat pe date>"
+  "positiveObservation": "<un lucru concret pe care utilizatorul îl face bine, bazat pe date>",
+  "budgetAdvice": [<strategii pentru depășiri de buget, sau array gol dacă nu sunt depășiri>]
 }
 
 Reguli:
-- healthScore: 80-100 dacă economisește >20%, 60-79 dacă e pe plus, 40-59 dacă e pe minus mic, sub 40 dacă deficitul e mare
-- Sfaturile trebuie să menționeze categorii sau sume concrete din date
+- healthScore: 80-100 dacă economisește >20%, 60-79 dacă e pe plus, 40-59 dacă e pe minus mic, sub 40 dacă deficitul e mare; scade 5-15 puncte pentru fiecare categorie cu buget depășit
+- Sfaturile trebuie să menționeze categorii sau sume concrete din date${budgetOverruns.length > 0 ? "\n- Menționează explicit depășirile de buget și impactul lor" : ""}
 - Fii încurajator dar realist
-- Limba: română`;
+- Limba: română${budgetAdviceInstruction}`;
 
     const message = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
@@ -108,7 +132,6 @@ Reguli:
 
     const rawText = message.content[0].type === "text" ? message.content[0].text : "";
 
-    // Parsăm JSON-ul returnat de Claude
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       console.error("[AI_COACH] No JSON in response:", rawText);
