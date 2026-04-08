@@ -137,7 +137,8 @@ async function sendBudgetEmail(
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Resend error: ${err}`);
+    console.error("[RESEND] Error response:", res.status, err);
+    throw new Error(`Resend error ${res.status}: ${err}`);
   }
 }
 
@@ -212,7 +213,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Toate bugetele sunt în regulă.", alerts: 0 });
     }
 
-    await sendBudgetEmail(authUser.email!, user.name, exceeded, nearLimit, monthLabel);
+    // Resend free tier permite trimitere doar către emailul înregistrat pe resend.com
+    // NOTIFY_EMAIL = emailul cu care ești înregistrată pe resend.com
+    const toEmail = process.env.NOTIFY_EMAIL || authUser.email!;
+    await sendBudgetEmail(toEmail, user.name, exceeded, nearLimit, monthLabel);
 
     return NextResponse.json({
       success: true,
