@@ -674,8 +674,8 @@ export default function TransactionsPage() {
                     Șterge
                   </button>
                 </div>
-                </div>{/* end desktop row */}
-              </div>{/* end wrapper */}
+                </div>
+              </div>
             ))
           )}
         </div>
