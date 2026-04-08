@@ -13,12 +13,28 @@ interface Goal {
   deadline: string | null;
   icon: string;
   color: string;
+  savingsMethod: string | null;
 }
 
 const ICON_OPTIONS = ["🎯", "🏖️", "🚗", "🏠", "💍", "📱", "✈️", "🎓", "💪", "🐣", "🛡️", "💎"];
 const COLOR_OPTIONS = [
   "#14b8a6", "#f97316", "#6366f1", "#ec4899",
   "#f59e0b", "#22c55e", "#3b82f6", "#8b5cf6",
+];
+
+const SAVINGS_METHODS = [
+  { value: "fidelis", label: "Fidelis", icon: "🏛️", desc: "Titluri de stat Fidelis" },
+  { value: "tezaur", label: "Tezaur", icon: "🏦", desc: "Titluri de stat Tezaur" },
+  { value: "bursa", label: "Bursă", icon: "📈", desc: "Acțiuni și ETF-uri" },
+  { value: "fond_mutual", label: "Fond mutual", icon: "🪙", desc: "Fonduri de investiții" },
+  { value: "depozit", label: "Depozit bancar", icon: "🏧", desc: "Depozit la termen" },
+  { value: "economii", label: "Cont economii", icon: "💰", desc: "Cont de economii cu dobândă" },
+  { value: "crypto", label: "Crypto", icon: "₿", desc: "Bitcoin, Ethereum, etc." },
+  { value: "numerar", label: "Numerar", icon: "💵", desc: "Cash la saltea" },
+  { value: "aur", label: "Aur", icon: "🥇", desc: "Lingouri sau monede de aur" },
+  { value: "imobiliar", label: "Imobiliare", icon: "🏗️", desc: "Investiții în proprietăți" },
+  { value: "pensie", label: "Pensie privată", icon: "👴", desc: "Pilon 3 sau pensie facultativă" },
+  { value: "altele", label: "Altele", icon: "✏️", desc: "Altă metodă" },
 ];
 
 function formatAmount(amount: number) {
@@ -55,6 +71,8 @@ export default function GoalsPage() {
   const [formDeadline, setFormDeadline] = useState("");
   const [formIcon, setFormIcon] = useState("🎯");
   const [formColor, setFormColor] = useState("#14b8a6");
+  const [formMethod, setFormMethod] = useState("");
+  const [showMethodPicker, setShowMethodPicker] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -77,7 +95,7 @@ export default function GoalsPage() {
   const openAdd = () => {
     setEditingGoal(null);
     setFormName(""); setFormTarget(""); setFormCurrent("0");
-    setFormDeadline(""); setFormIcon("🎯"); setFormColor("#14b8a6");
+    setFormDeadline(""); setFormIcon("🎯"); setFormColor("#14b8a6"); setFormMethod("");
     setFormError(null);
     setShowModal(true);
   };
@@ -90,6 +108,7 @@ export default function GoalsPage() {
     setFormDeadline(g.deadline || "");
     setFormIcon(g.icon);
     setFormColor(g.color);
+    setFormMethod(g.savingsMethod || "");
     setFormError(null);
     setShowModal(true);
   };
@@ -116,6 +135,7 @@ export default function GoalsPage() {
           deadline: formDeadline || null,
           icon: formIcon,
           color: formColor,
+          savingsMethod: formMethod || null,
         }),
       });
 
@@ -324,6 +344,17 @@ export default function GoalsPage() {
                         Mai ai nevoie de {formatAmount(remaining)}
                       </p>
                     )}
+                    {g.savingsMethod && (
+                      (() => {
+                        const m = SAVINGS_METHODS.find((s) => s.value === g.savingsMethod);
+                        return m ? (
+                          <span className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-lg text-xs font-bold"
+                            style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                            {m.icon} {m.label}
+                          </span>
+                        ) : null;
+                      })()
+                    )}
                   </div>
 
                   {/* Buton adaugă bani */}
@@ -383,6 +414,63 @@ export default function GoalsPage() {
                 </label>
                 <input type="date" value={formDeadline} onChange={(e) => setFormDeadline(e.target.value)}
                   style={inputStyle} />
+              </div>
+
+              {/* Metodă economisire */}
+              <div>
+                <label className="block text-sm font-bold mb-2" style={{ color: "#2dd4bf" }}>
+                  Metodă economisire <span style={{ color: "rgba(255,255,255,0.3)", fontWeight: "normal" }}>(opțional)</span>
+                </label>
+                <button type="button" onClick={() => setShowMethodPicker(!showMethodPicker)}
+                  className="w-full rounded-xl px-4 py-3 text-sm text-left flex items-center justify-between"
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: formMethod ? "#ffffff" : "rgba(255,255,255,0.35)" }}>
+                  <span>
+                    {formMethod ? (
+                      (() => {
+                        const m = SAVINGS_METHODS.find((s) => s.value === formMethod);
+                        return m ? `${m.icon} ${m.label}` : formMethod;
+                      })()
+                    ) : "Alege metoda de economisire..."}
+                  </span>
+                  <span style={{ color: "rgba(255,255,255,0.3)" }}>{showMethodPicker ? "▲" : "▼"}</span>
+                </button>
+
+                {showMethodPicker && (
+                  <div className="mt-2 rounded-xl overflow-hidden"
+                    style={{ background: "rgba(15,23,42,0.98)", border: "1px solid rgba(255,255,255,0.12)" }}>
+                    {/* Opțiunea "Fără metodă" */}
+                    <button type="button"
+                      onClick={() => { setFormMethod(""); setShowMethodPicker(false); }}
+                      className="w-full px-4 py-3 text-sm text-left flex items-center gap-3 transition-all"
+                      style={{
+                        background: !formMethod ? "rgba(20,184,166,0.1)" : "transparent",
+                        borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        color: "rgba(255,255,255,0.4)",
+                      }}>
+                      <span>—</span>
+                      <span>Fără metodă specificată</span>
+                    </button>
+                    {SAVINGS_METHODS.map((m) => (
+                      <button key={m.value} type="button"
+                        onClick={() => { setFormMethod(m.value); setShowMethodPicker(false); }}
+                        className="w-full px-4 py-3 text-sm text-left flex items-center gap-3 transition-all"
+                        style={{
+                          background: formMethod === m.value ? "rgba(20,184,166,0.1)" : "transparent",
+                          borderBottom: "1px solid rgba(255,255,255,0.04)",
+                          color: "#ffffff",
+                        }}>
+                        <span className="text-lg w-7">{m.icon}</span>
+                        <div>
+                          <p className="font-bold text-sm">{m.label}</p>
+                          <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{m.desc}</p>
+                        </div>
+                        {formMethod === m.value && (
+                          <span className="ml-auto text-xs font-bold" style={{ color: "#2dd4bf" }}>✓</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Icon */}

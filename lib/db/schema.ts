@@ -239,6 +239,7 @@ export const goals = pgTable("goals", {
   deadline: date("deadline", { mode: 'string' }), // opțional, YYYY-MM-DD
   icon: text("icon").notNull().default("🎯"),
   color: text("color").notNull().default("#14b8a6"),
+  savingsMethod: text("savings_method"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

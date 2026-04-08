@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { name, targetAmount, currentAmount, deadline, icon, color } = await request.json();
+    const { name, targetAmount, currentAmount, deadline, icon, color, savingsMethod } = await request.json();
 
     if (!name || !targetAmount) {
       return NextResponse.json({ error: "Numele și suma țintă sunt obligatorii" }, { status: 400 });
@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
         deadline: deadline || null,
         icon: icon || "🎯",
         color: color || "#14b8a6",
+        savingsMethod: savingsMethod || null,
       })
       .returning();
 
