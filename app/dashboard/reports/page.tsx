@@ -36,6 +36,14 @@ interface ReportData {
     balance: number;
     transactionCount: number;
   };
+  comparison?: {
+    currentLabel: string;
+    previousLabel: string;
+    current: { expenses: number; income: number };
+    previous: { expenses: number; income: number };
+    expenseDiff: number | null;
+    incomeDiff: number | null;
+  };
 }
 
 interface CoachData {
@@ -329,6 +337,119 @@ export default function ReportsPage() {
                 );
               })()}
             </div>
+
+            {/* Comparație lună vs lună precedentă */}
+            {data.comparison && (data.comparison.previous.expenses > 0 || data.comparison.previous.income > 0) && (() => {
+              const c = data.comparison!;
+              const fmtDiff = (diff: number | null) => {
+                if (diff === null) return null;
+                const sign = diff > 0 ? "+" : "";
+                return `${sign}${diff}%`;
+              };
+              return (
+                <div className="rounded-2xl p-5 mb-6" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-lg">📅</span>
+                    <div>
+                      <p className="font-bold" style={{ color: "#ffffff" }}>Comparație lunară</p>
+                      <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                        {c.currentLabel} față de {c.previousLabel}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Cheltuieli */}
+                    <div className="rounded-xl p-4" style={{ background: "rgba(248,113,113,0.07)", border: "1px solid rgba(248,113,113,0.15)" }}>
+                      <p className="text-xs font-bold uppercase mb-3" style={{ color: "rgba(248,113,113,0.7)", letterSpacing: "0.07em" }}>Cheltuieli</p>
+                      <div className="flex items-end justify-between mb-2">
+                        <div>
+                          <p className="text-xs mb-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{c.previousLabel}</p>
+                          <p className="text-sm font-bold" style={{ color: "rgba(255,255,255,0.6)" }}>
+                            {new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(c.previous.expenses)} RON
+                          </p>
+                        </div>
+                        {c.expenseDiff !== null && (
+                          <span className="text-sm font-bold px-2 py-1 rounded-lg"
+                            style={{
+                              background: c.expenseDiff > 0 ? "rgba(248,113,113,0.2)" : "rgba(74,222,128,0.2)",
+                              color: c.expenseDiff > 0 ? "#f87171" : "#4ade80",
+                            }}>
+                            {fmtDiff(c.expenseDiff)}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs mb-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{c.currentLabel}</p>
+                        <p className="text-lg font-bold" style={{ color: "#f87171" }}>
+                          {new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(c.current.expenses)} RON
+                        </p>
+                      </div>
+                      {/* Bar vizual */}
+                      {c.previous.expenses > 0 && (
+                        <div className="mt-3 space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs w-16 shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>{c.previousLabel.split(" ")[0]}</span>
+                            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
+                              <div className="h-2 rounded-full" style={{ width: "100%", background: "rgba(248,113,113,0.4)" }} />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs w-16 shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>{c.currentLabel.split(" ")[0]}</span>
+                            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
+                              <div className="h-2 rounded-full" style={{ width: `${Math.min((c.current.expenses / c.previous.expenses) * 100, 150)}%`, background: c.current.expenses > c.previous.expenses ? "#f87171" : "#4ade80" }} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Venituri */}
+                    <div className="rounded-xl p-4" style={{ background: "rgba(74,222,128,0.07)", border: "1px solid rgba(74,222,128,0.15)" }}>
+                      <p className="text-xs font-bold uppercase mb-3" style={{ color: "rgba(74,222,128,0.7)", letterSpacing: "0.07em" }}>Venituri</p>
+                      <div className="flex items-end justify-between mb-2">
+                        <div>
+                          <p className="text-xs mb-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{c.previousLabel}</p>
+                          <p className="text-sm font-bold" style={{ color: "rgba(255,255,255,0.6)" }}>
+                            {new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(c.previous.income)} RON
+                          </p>
+                        </div>
+                        {c.incomeDiff !== null && (
+                          <span className="text-sm font-bold px-2 py-1 rounded-lg"
+                            style={{
+                              background: c.incomeDiff >= 0 ? "rgba(74,222,128,0.2)" : "rgba(248,113,113,0.2)",
+                              color: c.incomeDiff >= 0 ? "#4ade80" : "#f87171",
+                            }}>
+                            {fmtDiff(c.incomeDiff)}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs mb-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{c.currentLabel}</p>
+                        <p className="text-lg font-bold" style={{ color: "#4ade80" }}>
+                          {new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(c.current.income)} RON
+                        </p>
+                      </div>
+                      {c.previous.income > 0 && (
+                        <div className="mt-3 space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs w-16 shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>{c.previousLabel.split(" ")[0]}</span>
+                            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
+                              <div className="h-2 rounded-full" style={{ width: "100%", background: "rgba(74,222,128,0.4)" }} />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs w-16 shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>{c.currentLabel.split(" ")[0]}</span>
+                            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
+                              <div className="h-2 rounded-full" style={{ width: `${Math.min((c.current.income / c.previous.income) * 100, 150)}%`, background: c.current.income >= c.previous.income ? "#4ade80" : "#f87171" }} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Depășiri buget — doar dacă există bugete setate */}
             {budgets.length > 0 && (() => {

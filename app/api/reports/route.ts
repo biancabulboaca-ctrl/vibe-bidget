@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { db, schema } from "@/lib/db";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, lte } from "drizzle-orm";
 
 const MONTH_NAMES = ["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -130,6 +130,45 @@ export async function GET(request: NextRequest) {
         income: Math.round(data.income * 100) / 100,
       }));
 
+    // --- Comparație luna curentă vs luna precedentă ---
+    const now = new Date();
+    const curFirst = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const curLast = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const curLastStr = `${curLast.getFullYear()}-${String(curLast.getMonth() + 1).padStart(2, "0")}-${String(curLast.getDate()).padStart(2, "0")}`;
+
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevFirst = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}-01`;
+    const prevLast = new Date(prevDate.getFullYear(), prevDate.getMonth() + 1, 0);
+    const prevLastStr = `${prevLast.getFullYear()}-${String(prevLast.getMonth() + 1).padStart(2, "0")}-${String(prevLast.getDate()).padStart(2, "0")}`;
+    const prevLabel = `${MONTH_NAMES[prevDate.getMonth()]} ${prevDate.getFullYear()}`;
+    const curLabel = `${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`;
+
+    const [curRows, prevRows] = await Promise.all([
+      db.select({ amount: schema.transactions.amount, categoryId: schema.transactions.categoryId, categoryName: schema.categories.name })
+        .from(schema.transactions)
+        .leftJoin(schema.categories, eq(schema.transactions.categoryId, schema.categories.id))
+        .where(and(eq(schema.transactions.userId, authUser.id), gte(schema.transactions.date, curFirst), lte(schema.transactions.date, curLastStr))),
+      db.select({ amount: schema.transactions.amount, categoryId: schema.transactions.categoryId, categoryName: schema.categories.name })
+        .from(schema.transactions)
+        .leftJoin(schema.categories, eq(schema.transactions.categoryId, schema.categories.id))
+        .where(and(eq(schema.transactions.userId, authUser.id), gte(schema.transactions.date, prevFirst), lte(schema.transactions.date, prevLastStr))),
+    ]);
+
+    const sumExpenses = (r: typeof curRows) => r
+      .filter((x) => Number(x.amount) < 0 && x.categoryName !== "Transferuri")
+      .reduce((s, x) => s + Math.abs(Number(x.amount)), 0);
+    const sumIncome = (r: typeof curRows) => r
+      .filter((x) => Number(x.amount) >= 0 && x.categoryName !== "Transferuri")
+      .reduce((s, x) => s + Number(x.amount), 0);
+
+    const curExpenses = Math.round(sumExpenses(curRows) * 100) / 100;
+    const prevExpenses = Math.round(sumExpenses(prevRows) * 100) / 100;
+    const curIncome = Math.round(sumIncome(curRows) * 100) / 100;
+    const prevIncome = Math.round(sumIncome(prevRows) * 100) / 100;
+
+    const expenseDiff = prevExpenses > 0 ? Math.round(((curExpenses - prevExpenses) / prevExpenses) * 100) : null;
+    const incomeDiff = prevIncome > 0 ? Math.round(((curIncome - prevIncome) / prevIncome) * 100) : null;
+
     return NextResponse.json({
       byCategory,
       byMonth,
@@ -138,6 +177,14 @@ export async function GET(request: NextRequest) {
         totalIncome,
         balance: totalIncome - totalExpenses,
         transactionCount: rows.length,
+      },
+      comparison: {
+        currentLabel: curLabel,
+        previousLabel: prevLabel,
+        current: { expenses: curExpenses, income: curIncome },
+        previous: { expenses: prevExpenses, income: prevIncome },
+        expenseDiff,
+        incomeDiff,
       },
     });
   } catch (error) {
