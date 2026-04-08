@@ -251,7 +251,6 @@ export default function ReportsPage() {
           </div>
 
           <div className="flex items-center gap-2">
-          {data && data.summary.transactionCount > 0 && (
             <button onClick={handlePrint}
               className="px-4 py-2 rounded-xl text-sm font-bold no-print"
               style={{
@@ -261,7 +260,6 @@ export default function ReportsPage() {
               }}>
               🖨️ Printează / PDF
             </button>
-          )}
           {data && data.summary.transactionCount > 0 && (
             <button onClick={handleAnalyze} disabled={coachLoading}
               className="px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2"
