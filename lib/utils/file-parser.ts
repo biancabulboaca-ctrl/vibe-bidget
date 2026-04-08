@@ -252,7 +252,257 @@ export async function parseExcel(file: File): Promise<ParseResult> {
 }
 
 /**
- * FUNCȚIA 3: Parse PDF - TEMPORAR DEZACTIVATĂ
+ * FUNCȚIA 3: Parse ING Bank (Excel .xls/.xlsx)
+ *
+ * Format ING România:
+ * Coloane: Data, Detalii tranzactie, Debit, Credit, Sold
+ * Data în format DD.MM.YYYY
+ * Debit = cheltuieli (pozitiv în fișier, noi îl facem negativ)
+ * Credit = venituri (pozitiv)
+ */
+export async function parseING(file: File): Promise<ParseResult> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        if (!data) { resolve({ success: false, transactions: [], error: "Nu s-a putut citi fișierul" }); return; }
+
+        const workbook = XLSX.read(data, { type: "binary" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const allRows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        // Găsim rândul cu header (conține "Data" sau "Detalii")
+        let headerIdx = 0;
+        for (let i = 0; i < Math.min(allRows.length, 30); i++) {
+          const row = allRows[i] as string[];
+          const text = row.map(c => String(c ?? "").toLowerCase()).join(" ");
+          if (text.includes("data") && (text.includes("debit") || text.includes("detalii"))) {
+            headerIdx = i;
+            break;
+          }
+        }
+
+        const headers = (allRows[headerIdx] as unknown[]).map(h => String(h ?? "").trim().toLowerCase());
+        const dataRows = allRows.slice(headerIdx + 1);
+
+        const transactions: ParsedTransaction[] = [];
+        for (const row of dataRows) {
+          const r = row as unknown[];
+          if (!r || r.every(c => !c)) continue;
+
+          const obj: Record<string, unknown> = {};
+          headers.forEach((h, i) => { obj[h] = r[i]; });
+
+          // Data
+          const dateRaw = obj["data"] ?? obj["dată"] ?? r[0];
+          if (!dateRaw) continue;
+          const date = formatDate(dateRaw as string | number);
+
+          // Descriere
+          const description = String(
+            obj["detalii tranzactie"] ?? obj["detalii"] ?? obj["descriere"] ?? obj["description"] ?? r[1] ?? ""
+          ).trim();
+          if (!description) continue;
+
+          // Debit/Credit
+          const debitRaw = String(obj["debit"] ?? "").replace(/\s/g, "").replace(",", ".");
+          const creditRaw = String(obj["credit"] ?? "").replace(/\s/g, "").replace(",", ".");
+          const debit = parseFloat(debitRaw);
+          const credit = parseFloat(creditRaw);
+
+          let amount: number | null = null;
+          if (!isNaN(debit) && debit > 0) amount = -debit;
+          else if (!isNaN(credit) && credit > 0) amount = credit;
+          if (amount === null) continue;
+
+          // Monedă (ING folosește de obicei RON)
+          const currency = String(obj["moneda"] ?? obj["currency"] ?? obj["valuta"] ?? "RON").trim() || "RON";
+
+          transactions.push({ date, description, amount, currency, type: amount < 0 ? "debit" : "credit" });
+        }
+
+        resolve({ success: true, transactions, rowCount: transactions.length });
+      } catch (error: unknown) {
+        resolve({ success: false, transactions: [], error: error instanceof Error ? error.message : "Eroare parsare ING" });
+      }
+    };
+    reader.onerror = () => resolve({ success: false, transactions: [], error: "Eroare la citirea fișierului" });
+    reader.readAsBinaryString(file);
+  });
+}
+
+/**
+ * FUNCȚIA 4: Parse BCR (CSV sau Excel)
+ *
+ * Format BCR România:
+ * Coloane: Data tranzactiei, Data valutei, Descriere, Referinta, Debit, Credit, Moneda
+ * Data în format DD.MM.YYYY sau YYYY-MM-DD
+ */
+export async function parseBCR(file: File): Promise<ParseResult> {
+  const isExcel = /\.(xlsx?|xls)$/i.test(file.name);
+
+  if (isExcel) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = e.target?.result;
+          if (!data) { resolve({ success: false, transactions: [], error: "Nu s-a putut citi fișierul" }); return; }
+
+          const workbook = XLSX.read(data, { type: "binary" });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const allRows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+          let headerIdx = 0;
+          for (let i = 0; i < Math.min(allRows.length, 30); i++) {
+            const text = (allRows[i] as string[]).map(c => String(c ?? "").toLowerCase()).join(" ");
+            if (text.includes("data") && text.includes("descriere")) { headerIdx = i; break; }
+          }
+
+          const headers = (allRows[headerIdx] as unknown[]).map(h => String(h ?? "").trim().toLowerCase());
+          const dataRows = allRows.slice(headerIdx + 1);
+          const transactions: ParsedTransaction[] = [];
+
+          for (const row of dataRows) {
+            const r = row as unknown[];
+            if (!r || r.every(c => !c)) continue;
+            const obj: Record<string, unknown> = {};
+            headers.forEach((h, i) => { obj[h] = r[i]; });
+            const t = parseBCRRow(obj);
+            if (t) transactions.push(t);
+          }
+
+          resolve({ success: true, transactions, rowCount: transactions.length });
+        } catch (error: unknown) {
+          resolve({ success: false, transactions: [], error: error instanceof Error ? error.message : "Eroare parsare BCR" });
+        }
+      };
+      reader.onerror = () => resolve({ success: false, transactions: [], error: "Eroare la citirea fișierului" });
+      reader.readAsBinaryString(file);
+    });
+  }
+
+  // CSV
+  return new Promise((resolve) => {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      delimiter: ";",
+      encoding: "UTF-8",
+      complete: (results) => {
+        const transactions: ParsedTransaction[] = [];
+        for (const row of results.data as Record<string, string>[]) {
+          const normalized: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(row)) normalized[k.toLowerCase().trim()] = v;
+          const t = parseBCRRow(normalized);
+          if (t) transactions.push(t);
+        }
+        resolve({ success: true, transactions, rowCount: transactions.length });
+      },
+      error: (err) => resolve({ success: false, transactions: [], error: err.message }),
+    });
+  });
+}
+
+function parseBCRRow(obj: Record<string, unknown>): ParsedTransaction | null {
+  const dateRaw = obj["data tranzactiei"] ?? obj["data tranzacției"] ?? obj["data"] ?? obj["dată"];
+  if (!dateRaw) return null;
+  const date = formatDate(dateRaw as string | number);
+
+  const description = String(obj["descriere"] ?? obj["description"] ?? obj["detalii"] ?? "").trim();
+  if (!description) return null;
+
+  const debitRaw = String(obj["debit"] ?? "").replace(/\s/g, "").replace(",", ".");
+  const creditRaw = String(obj["credit"] ?? "").replace(/\s/g, "").replace(",", ".");
+  const debit = parseFloat(debitRaw);
+  const credit = parseFloat(creditRaw);
+
+  let amount: number | null = null;
+  if (!isNaN(debit) && debit > 0) amount = -debit;
+  else if (!isNaN(credit) && credit > 0) amount = credit;
+  if (amount === null) return null;
+
+  const currency = String(obj["moneda"] ?? obj["currency"] ?? obj["valuta"] ?? "RON").trim() || "RON";
+  return { date, description, amount, currency, type: amount < 0 ? "debit" : "credit" };
+}
+
+/**
+ * FUNCȚIA 5: Parse Banca Transilvania / BT (Excel)
+ *
+ * Format BT România:
+ * Coloane: Data, Descriere tranzactie, Referinta, Debit, Credit, Moneda, Sold
+ * Data în format DD/MM/YYYY sau DD.MM.YYYY
+ */
+export async function parseBT(file: File): Promise<ParseResult> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        if (!data) { resolve({ success: false, transactions: [], error: "Nu s-a putut citi fișierul" }); return; }
+
+        const workbook = XLSX.read(data, { type: "binary" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const allRows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        let headerIdx = 0;
+        for (let i = 0; i < Math.min(allRows.length, 30); i++) {
+          const text = (allRows[i] as string[]).map(c => String(c ?? "").toLowerCase()).join(" ");
+          if (text.includes("data") && (text.includes("descriere") || text.includes("debit"))) {
+            headerIdx = i;
+            break;
+          }
+        }
+
+        const headers = (allRows[headerIdx] as unknown[]).map(h => String(h ?? "").trim().toLowerCase());
+        const dataRows = allRows.slice(headerIdx + 1);
+        const transactions: ParsedTransaction[] = [];
+
+        for (const row of dataRows) {
+          const r = row as unknown[];
+          if (!r || r.every(c => !c)) continue;
+          const obj: Record<string, unknown> = {};
+          headers.forEach((h, i) => { obj[h] = r[i]; });
+
+          const dateRaw = obj["data"] ?? obj["dată"] ?? obj["date"] ?? r[0];
+          if (!dateRaw) continue;
+          const date = formatDate(dateRaw as string | number);
+
+          const description = String(
+            obj["descriere tranzactie"] ?? obj["descriere tranzacție"] ?? obj["descriere"] ?? obj["description"] ?? obj["detalii"] ?? r[1] ?? ""
+          ).trim();
+          if (!description) continue;
+
+          const debitRaw = String(obj["debit"] ?? "").replace(/[.\s]/g, "").replace(",", ".");
+          const creditRaw = String(obj["credit"] ?? "").replace(/[.\s]/g, "").replace(",", ".");
+          const debit = parseFloat(debitRaw);
+          const credit = parseFloat(creditRaw);
+
+          let amount: number | null = null;
+          if (!isNaN(debit) && debit > 0) amount = -debit;
+          else if (!isNaN(credit) && credit > 0) amount = credit;
+          if (amount === null) continue;
+
+          const currency = String(obj["moneda"] ?? obj["currency"] ?? obj["valuta"] ?? "RON").trim() || "RON";
+          transactions.push({ date, description, amount, currency, type: amount < 0 ? "debit" : "credit" });
+        }
+
+        resolve({ success: true, transactions, rowCount: transactions.length });
+      } catch (error: unknown) {
+        resolve({ success: false, transactions: [], error: error instanceof Error ? error.message : "Eroare parsare BT" });
+      }
+    };
+    reader.onerror = () => resolve({ success: false, transactions: [], error: "Eroare la citirea fișierului" });
+    reader.readAsBinaryString(file);
+  });
+}
+
+/**
+ * FUNCȚIA 6: Parse PDF - TEMPORAR DEZACTIVATĂ
  *
  * PDF parsing este complex în environment serverless.
  *

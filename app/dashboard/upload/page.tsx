@@ -4,7 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardNav from "@/app/dashboard/nav";
-import { parseCSV, parseExcel, type ParsedTransaction } from "@/lib/utils/file-parser";
+import { parseCSV, parseExcel, parseING, parseBCR, parseBT, type ParsedTransaction } from "@/lib/utils/file-parser";
+
+type BankFormat = "auto" | "raiffeisen" | "ing" | "bcr" | "bt" | "revolut";
 
 interface Bank { id: string; name: string; color: string; }
 
@@ -20,6 +22,7 @@ export default function UploadPage() {
   const router = useRouter();
   const [banks, setBanks] = useState<Bank[]>([]);
   const [selectedBankId, setSelectedBankId] = useState("");
+  const [bankFormat, setBankFormat] = useState<BankFormat>("auto");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -58,7 +61,11 @@ export default function UploadPage() {
     setParsing(true);
     try {
       const isExcel = /\.(xlsx?|xls)$/i.test(file.name);
-      const result = isExcel ? await parseExcel(file) : await parseCSV(file);
+      let result;
+      if (bankFormat === "ing") result = await parseING(file);
+      else if (bankFormat === "bcr") result = await parseBCR(file);
+      else if (bankFormat === "bt") result = await parseBT(file);
+      else result = isExcel ? await parseExcel(file) : await parseCSV(file);
 
       if (!result.success) {
         setParseError(result.error || "Nu s-a putut citi fișierul.");
@@ -109,6 +116,26 @@ export default function UploadPage() {
     } finally {
       setImporting(false);
     }
+  };
+
+  const handleFormatChange = async (format: BankFormat) => {
+    setBankFormat(format);
+    if (!selectedFile) return;
+    setParsing(true);
+    setParsedTransactions([]);
+    setParseError(null);
+    try {
+      const isExcel = /\.(xlsx?|xls)$/i.test(selectedFile.name);
+      let result;
+      if (format === "ing") result = await parseING(selectedFile);
+      else if (format === "bcr") result = await parseBCR(selectedFile);
+      else if (format === "bt") result = await parseBT(selectedFile);
+      else result = isExcel ? await parseExcel(selectedFile) : await parseCSV(selectedFile);
+      if (!result.success) setParseError(result.error || "Nu s-a putut citi fișierul.");
+      else if (result.transactions.length === 0) setParseError("Fișierul nu conține tranzacții valide.");
+      else setParsedTransactions(result.transactions);
+    } catch { setParseError("Eroare neașteptată."); }
+    finally { setParsing(false); }
   };
 
   const resetUpload = () => {
@@ -164,6 +191,50 @@ export default function UploadPage() {
             border: "1px solid rgba(255,255,255,0.08)",
           }}>
           <div className="flex flex-col gap-5">
+
+            {/* Format bancă */}
+            <div>
+              <label className="block text-sm font-bold mb-2" style={{ color: "#2dd4bf" }}>
+                Format extras bancar
+              </label>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {([
+                  { value: "auto", label: "Auto", icon: "🔍" },
+                  { value: "raiffeisen", label: "Raiffeisen", icon: "🟡" },
+                  { value: "ing", label: "ING", icon: "🟠" },
+                  { value: "bcr", label: "BCR", icon: "🔵" },
+                  { value: "bt", label: "BT", icon: "🟣" },
+                  { value: "revolut", label: "Revolut", icon: "⚫" },
+                ] as { value: BankFormat; label: string; icon: string }[]).map((f) => (
+                  <button
+                    key={f.value}
+                    type="button"
+                    onClick={() => handleFormatChange(f.value)}
+                    className="flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl text-xs font-bold transition-all"
+                    style={bankFormat === f.value ? {
+                      background: "rgba(20,184,166,0.2)",
+                      border: "1px solid rgba(20,184,166,0.5)",
+                      color: "#2dd4bf",
+                    } : {
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      color: "rgba(255,255,255,0.45)",
+                    }}>
+                    <span className="text-base">{f.icon}</span>
+                    <span>{f.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs mt-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>
+                {bankFormat === "auto"
+                  ? "Detecție automată — funcționează pentru Raiffeisen și Revolut"
+                  : bankFormat === "ing" ? "ING Bank România — fișier Excel descărcat din ING Home'Bank"
+                  : bankFormat === "bcr" ? "BCR — fișier CSV sau Excel din George / BCR Online"
+                  : bankFormat === "bt" ? "Banca Transilvania — fișier Excel din BT24"
+                  : bankFormat === "revolut" ? "Revolut — același ca Auto, detecție automată"
+                  : "Raiffeisen Bank — fișier Excel descărcat din Raiffeisen Online"}
+              </p>
+            </div>
 
             {/* File input */}
             <div>
